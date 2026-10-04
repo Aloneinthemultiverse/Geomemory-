@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 results/**/run.log
 data/raw/
+data/spark_out/
