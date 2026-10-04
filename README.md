@@ -1,7 +1,7 @@
 # GeoMemory
 
 A distributed spatial-temporal memory and provenance engine for AI agents.
-The full specification is in [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
+The full specification is in [docs/SPECIFICATION.md](docs/SPECIFICATION.md). The **evaluation report**, with every experiment on 1M real NYC Uber pickups and answers to the research questions, is in [docs/REPORT.md](docs/REPORT.md).
 
 ## Try the UI
 
@@ -115,3 +115,4 @@ Every query is checked against a scan of every record, across many random seeds,
 ## Next steps
 
 - A multi-machine deployment (the cluster here uses processes on one machine)
+- Return ids or aggregates from PostGIS for wide queries (E7: the client, not PostGIS, is the bottleneck)
