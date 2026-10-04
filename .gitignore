@@ -1,6 +1,7 @@
-__pycache__/
 *.pyc
-results/**/run.log
+.venv/
+__pycache__/
 data/raw/
 data/spark_out/
+results/**/run.log
 results/run-all.log

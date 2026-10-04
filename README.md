@@ -3,12 +3,24 @@
 A distributed spatial-temporal memory and provenance engine for AI agents.
 The full specification is in [docs/SPECIFICATION.md](docs/SPECIFICATION.md). The **evaluation report**, with every experiment on 1M real NYC Uber pickups and answers to the research questions, is in [docs/REPORT.md](docs/REPORT.md).
 
-## Set up on your laptop
+## Run it (one command)
 
 ```bash
 git clone -b ccr-bef85d66-vw1qxq https://github.com/aloneinthemultiverse/geomemory-.git geomemory && cd geomemory
-scripts/setup.sh                 # macOS/Linux. Windows: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+./run.sh                 # opens http://127.0.0.1:8765. Windows: powershell -ExecutionPolicy Bypass -File run.ps1
 ```
+
+You only need Python 3.10 or newer. The first run sets itself up (about a minute); after that it starts in under a second.
+
+| Command | What you get |
+|---|---|
+| `./run.sh` | Map UI with the demo world (factory, solar farm, flood) |
+| `./run.sh uber` | The same UI over 1.8M real NYC Uber pickups (downloads ~200 MB once) |
+| `./run.sh full` | Everything: PostGIS, AGE and Kafka in Docker, all datasets, the full test suite, then the UI |
+
+Live demo: <https://project-osn64.vercel.app>
+
+For the full stack set up by hand (Docker, Spark), see `scripts/setup.sh`.
 
 Step-by-step instructions for Windows, macOS and Linux, with troubleshooting, are in [docs/SETUP.md](docs/SETUP.md). If you only want to run everything in Docker: `docker compose up -d --build`.
 

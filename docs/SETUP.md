@@ -39,7 +39,18 @@ git clone -b ccr-bef85d66-vw1qxq https://github.com/aloneinthemultiverse/geomemo
 cd geomemory
 ```
 
-## 2. Run the setup script
+## 2. Quickest: one command
+
+```bash
+./run.sh            # macOS / Linux / WSL
+```
+```powershell
+powershell -ExecutionPolicy Bypass -File run.ps1      # Windows
+```
+
+This creates `.venv`, installs GeoMemory and opens the map UI. Add `uber` for the real-data demo, or `full` (macOS/Linux) for Docker backends and all tests. Use the setup scripts below to control each step yourself.
+
+## 2b. Full setup script
 
 **macOS / Linux:**
 ```bash
