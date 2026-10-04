@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/deck.gl@9.0.38/dist.min.js"></script>
 <style>
 :root, :root[data-theme="dark"] {
   --bg: #0b0f17; --glass: rgba(17, 23, 34, .86); --card: #161d2b; --card-2: #1d2636; --line: #263044;
@@ -178,9 +179,84 @@ td { padding: 7px 8px; border-bottom: 1px solid var(--line); }
 .bars { display: grid; gap: 8px; }
 .brow { display: grid; grid-template-columns: 140px 1fr 70px; gap: 10px; align-items: center; font-size: 12.5px; }
 .track { height: 12px; background: var(--card-2); border-radius: 6px; overflow: hidden; }
-.fill { height: 100%; background: var(--grad); border-radius: 6px; }
+.bfill { height: 100%; background: var(--grad); border-radius: 6px; }
 .val { text-align: right; font-family: "JetBrains Mono", monospace; font-size: 12px; }
 h4 { margin: 0 0 10px; font-size: 13px; }
+
+
+/* ask box */
+.askbox { display: flex; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 5px 5px 5px 14px; }
+.askbox:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.askbox input { flex: 1; border: 0; background: none; outline: none; min-width: 0; padding: 8px 0; font-size: 14.5px; }
+.askbox button { border: 0; border-radius: 10px; background: var(--grad); color: #fff; font-weight: 700; padding: 0 16px; cursor: pointer; }
+.askhint { font-size: 11.5px; color: var(--faint); margin: 7px 2px 0; }
+.ex { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.ex button { text-align: left; border: 1px solid var(--line); background: var(--card-2); border-radius: 10px; padding: 7px 10px; cursor: pointer; font-size: 12.5px; color: var(--muted); }
+.ex button:hover { color: var(--text); border-color: var(--accent); }
+.tour-btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; margin: 16px 0 4px; padding: 13px; border: 0; border-radius: 14px;
+            background: var(--grad); color: #fff; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 8px 26px rgba(109,139,255,.4); }
+.tour-btn:hover { filter: brightness(1.08); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tile { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 10px; cursor: pointer; transition: .15s; }
+.tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+.tile .e { font-size: 22px; display: block; margin-bottom: 4px; }
+.tile b { display: block; font-size: 13px; line-height: 1.25; }
+.tile small { color: var(--muted); font-size: 11.5px; line-height: 1.3; display: block; margin-top: 3px; }
+details.what { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+details.what summary { cursor: pointer; color: var(--text); font-weight: 600; }
+details.what p { margin: 8px 0 0; }
+.ai { background: var(--accent-soft); border-radius: 12px; padding: 12px; margin: 8px 0 14px; font-size: 14px; line-height: 1.5; }
+.ai .who { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+
+/* speed toast */
+#toast { position: fixed; z-index: 7; top: 82px; left: 50%; transform: translate(-50%, -20px); opacity: 0; transition: .35s; pointer-events: none;
+         padding: 10px 18px; border-radius: 99px; font-weight: 600; white-space: nowrap; display: flex; gap: 10px; align-items: center; }
+#toast.on { opacity: 1; transform: translate(-50%, 0); }
+#toast b { font-size: 18px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; font-variant-numeric: tabular-nums; }
+@media (min-width: 861px) { #toast { left: calc(50% + 212px); } }
+
+/* replay */
+.clock { font-size: 34px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+.clock small { font-size: 15px; color: var(--muted); font-weight: 600; }
+.ctrl { display: flex; gap: 8px; align-items: center; margin: 12px 0 6px; }
+.ctrl .play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--grad); color: #fff; font-size: 16px; cursor: pointer; flex: none; }
+.ctrl input[type=range] { flex: 1; accent-color: var(--accent); }
+.spark { width: 100%; height: 70px; display: block; cursor: pointer; }
+.moments { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.moments button { text-align: left; border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 8px 10px; cursor: pointer; font-size: 12.5px; }
+.moments button:hover { border-color: var(--accent); }
+.moments small { display: block; color: var(--muted); font-size: 11.5px; }
+.ramp { height: 8px; border-radius: 4px; background: linear-gradient(90deg, #1e3a8a, #6d8bff, #e879f9, #fb923c, #fde047); margin: 6px 0 2px; }
+
+/* crash test */
+.servers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+.srv { background: var(--card); border: 2px solid var(--line); border-radius: 12px; padding: 10px 6px; text-align: center; transition: .3s; }
+.srv .ic { font-size: 22px; }
+.srv b { display: block; font-size: 12.5px; }
+.srv small { color: var(--muted); font-size: 11px; display: block; }
+.srv.dead { border-color: var(--bad); background: rgba(248,113,113,.1); animation: shake .4s; }
+.srv.up { border-color: var(--good); }
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.log { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 8px; }
+.log li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13px; animation: fade .35s; }
+.log li b { color: var(--text); }
+.log li.good { border-color: rgba(52,211,153,.5); }
+.log li.bad { border-color: rgba(248,113,113,.5); }
+@keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+
+/* tour */
+#tour { position: fixed; z-index: 30; left: 50%; bottom: 22px; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); padding: 16px 18px; display: none; }
+#tour.on { display: block; animation: fade .3s; }
+#tour .step { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+#tour h3 { margin: 4px 0 6px; font-size: 18px; letter-spacing: -.01em; }
+#tour p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+#tour .btns { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+#tour .btns .dots { margin-right: auto; display: flex; gap: 5px; }
+#tour .btns .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+#tour .btns .dots i.on { background: var(--accent); }
+#tour button { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
+#tour button.next { background: var(--grad); color: #fff; border: 0; }
+@media (min-width: 861px) { #tour { left: calc(50% + 212px); } }
 
 @media (max-width: 860px) {
   .stats { display: none; }
@@ -189,9 +265,11 @@ h4 { margin: 0 0 10px; font-size: 13px; }
   .topbar { left: 8px; right: 8px; top: 8px; }
   #legend { display: none; }
   .kpis, .grid2 { grid-template-columns: 1fr; }
+  #tour { bottom: auto; top: 66px; }
+  #toast { top: 64px; }
   .brow { grid-template-columns: 100px 1fr 60px; }
 }
-@media (max-width: 480px) { .brand span.name { display: none; } nav button { padding: 6px 10px; } }
+@media (max-width: 480px) { .brand span.name { display: none; } nav { overflow-x: auto; } nav button { padding: 6px 9px; font-size: 12px; white-space: nowrap; } }
 </style>
 </head>
 <body>
@@ -201,7 +279,7 @@ h4 { margin: 0 0 10px; font-size: 13px; }
 
 <header class="topbar glass">
   <div class="brand"><div class="logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/></svg></div><span class="name">GeoMemory</span></div>
-  <nav><button class="on" data-tab="explore">Explore</button><button data-tab="bench">Benchmarks</button></nav>
+  <nav><button class="on" data-tab="explore">Home</button><button data-tab="replay">NYC replay</button><button data-tab="crash">Crash test</button><button data-tab="bench">Benchmarks</button></nav>
   <div class="stats" id="stats"></div>
   <button class="icon-btn" id="theme" title="Light / dark" aria-label="Toggle light or dark theme">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
@@ -213,18 +291,53 @@ h4 { margin: 0 0 10px; font-size: 13px; }
   <section class="view on" id="v-home"><div class="pad">
     <div class="hero">
       <span class="badge" id="dsBadge"><i></i>Live demo</span>
-      <h1>Ask the map <span>what happened.</span></h1>
-      <p>GeoMemory remembers events in the physical world: <b>where</b> and <b>when</b> they happened, <b>who reported them</b> and <b>how sure they were</b>. Pick a question to see an answer with the evidence behind it.</p>
+      <h1>A memory of <span>places and time</span> for AI.</h1>
+      <p>Ask what happened <b>where</b> and <b>when</b>. GeoMemory answers in milliseconds and shows the original records behind every answer.</p>
     </div>
-    <div class="section-title">Try a question</div>
+    <form class="askbox" id="askForm"><input id="askInput" autocomplete="off" placeholder="Ask anything, e.g. How busy was Times Square on July 4th?"><button type="submit">Ask</button></form>
+    <div class="askhint" id="askHint"></div>
+    <div class="ex" id="examples"></div>
+    <button class="tour-btn" id="tourBtn">▶&nbsp; Take the 60-second tour</button>
+    <div class="section-title">See what it can do</div>
+    <div class="tiles">
+      <button class="tile" data-go="replay"><span class="e">🌆</span><b>Watch NYC breathe</b><small>4.5M real rides, one week, in 3D</small></button>
+      <button class="tile" data-go="crash"><span class="e">💥</span><b>Crash a server</b><small>The answer survives</small></button>
+      <button class="tile" data-go="bench"><span class="e">⚡</span><b>How fast?</b><small>Measured benchmarks</small></button>
+    </div>
+    <details class="what"><summary>What is this, in simple words?</summary>
+      <p>Think of a <b>diary for a city</b>. Every event (a taxi pickup, a sensor alarm, a satellite photo) is written down with <b>where</b>, <b>when</b> and <b>who reported it</b>.</p>
+      <p>An AI assistant can then ask the diary questions like "what happened near here last night?" and get a correct answer instantly, with proof, instead of guessing.</p>
+      <p>The hard parts it solves: searching millions of events by place and time fast, deciding whom to believe when sources disagree, and not losing data when a computer crashes.</p>
+    </details>
+    <div class="section-title">More examples</div>
     <div class="cards" id="scenarios"></div>
-    <div class="section-title">How it works</div>
-    <div class="how">
-      <div><b>1 · Remember</b>Every report is stored with its place, time and source.</div>
-      <div><b>2 · Ask</b>Search by place, time, thing or source, in milliseconds.</div>
-      <div><b>3 · Trust</b>Every answer shows its evidence and confidence.</div>
-    </div>
-    <button class="ghost" id="toBuilder">＋ Build your own question</button>
+    <button class="ghost" id="toBuilder">＋ Build a question step by step</button>
+  </div></section>
+
+  <!-- REPLAY -->
+  <section class="view" id="v-replay"><div class="pad">
+    <button class="back" data-home>← Home</button>
+    <div class="section-title" style="margin-top:14px">A typical week in New York</div>
+    <div class="clock" id="clock">Monday <small>00:00</small></div>
+    <div class="muted" id="clockSub" style="font-size:13px"></div>
+    <div class="ctrl"><button class="play" id="play" aria-label="Play or pause">❚❚</button><input type="range" id="hour" min="0" max="167" step="0.01" value="0" aria-label="Hour of the week"></div>
+    <svg class="spark" id="spark" viewBox="0 0 336 70" preserveAspectRatio="none"></svg>
+    <div class="seg" id="look"><button class="on" data-look="3d">3D columns</button><button data-look="flat">Flat map</button></div>
+    <div class="tip">Each column is a ~650 m block of the city. Its <b>height and colour</b> (just colour on the flat map) show how many Uber rides started there in that hour, averaged over <b id="weeks">26</b> real weeks (<b id="pickups">4.5M</b> rides, Apr–Sep 2014).</div>
+    <div class="ramp"></div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--faint)"><span>quiet</span><span>busy</span></div>
+    <div class="section-title">Jump to a moment</div>
+    <div class="moments" id="moments"></div>
+    <div style="height:20px"></div>
+  </div></section>
+
+  <!-- CRASH TEST -->
+  <section class="view" id="v-crash"><div class="pad">
+    <button class="back" data-home>← Home</button>
+    <div class="hero" style="margin-top:12px"><h1 style="font-size:22px">What if a server <span>dies mid-question?</span></h1>
+      <p>Big systems split data across many computers. Here the NYC rides are spread over 4 servers, and every piece is stored on 2 of them. Let's unplug one and see if the answer changes.</p></div>
+    <div class="servers" id="servers"></div>
+    <button class="primary" id="crashBtn" style="margin:4px 0 14px">💥 Unplug a random server</button>
+    <ul class="log" id="crashLog"></ul>
   </div></section>
 
   <!-- BUILDER -->
@@ -286,6 +399,8 @@ h4 { margin: 0 0 10px; font-size: 13px; }
 </aside>
 
 <div id="legend" class="glass"></div>
+<div id="toast" class="glass"></div>
+<div id="tour" class="glass"></div>
 <aside id="drawer" class="glass"></aside>
 <main id="bench"><div class="wrap" id="benchBody"></div></main>
 
@@ -338,17 +453,25 @@ $("#theme").onclick = () => {
   try { localStorage.setItem("gm-theme", document.documentElement.dataset.theme); } catch {}
   if (map) { mapReady = false; map.setStyle(mapStyle()); }
 };
-$$("nav button").forEach(b => b.onclick = () => {
-  $$("nav button").forEach(x => x.classList.toggle("on", x === b));
-  const bench = b.dataset.tab === "bench";
-  $("#bench").classList.toggle("on", bench);
-  if (bench) loadBench();
-});
+function go(tab) {
+  $$("nav button").forEach(x => x.classList.toggle("on", x.dataset.tab === tab));
+  $("#bench").classList.toggle("on", tab === "bench");
+  if (tab === "bench") return loadBench();
+  clearResult();
+  if (tab === "replay") show("replay");
+  else if (tab === "crash") { show("crash"); crashInit(); }
+  else show("home");
+}
+$$("nav button").forEach(b => b.onclick = () => go(b.dataset.tab));
+$$("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
 function show(view) {
   $$(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + view));
   $("#panel .view.on").scrollTop = 0;
+  if (view !== "answer" && view !== "builder") $$("nav button").forEach(x => x.classList.toggle("on", x.dataset.tab === (view === "home" ? "explore" : view)));
+  replayVis = !RP ? "off" : view === "home" ? "ambient" : view === "replay" ? "full" : "off";
+  if (replayVis !== "off") flyNYC();
 }
-$$("[data-home]").forEach(b => b.onclick = () => { show("home"); clearResult(); });
+$$("[data-home]").forEach(b => b.onclick = () => go("explore"));
 $("#toBuilder").onclick = () => show("builder");
 
 /* ---------- builder wiring ---------- */
@@ -392,9 +515,11 @@ function mapStyle() {
 }
 function initMap() {
   if (!window.maplibregl) return;
-  map = new maplibregl.Map({container: "map", style: mapStyle(), center: [st.lon, st.lat],
-    zoom: ov?.dataset === "uber" ? 10.5 : 12, attributionControl: {compact: true}});
-  map.addControl(new maplibregl.NavigationControl({showCompass: false}), "bottom-right");
+  const nyc = RP && ov?.dataset !== "synthetic";
+  map = new maplibregl.Map({container: "map", style: mapStyle(), center: nyc ? NYC_VIEW.center : [st.lon, st.lat],
+    zoom: nyc ? 10.4 : ov?.dataset === "uber" ? 10.5 : 12, pitch: nyc ? 50 : 0, maxPitch: 70, attributionControl: {compact: true}});
+  map.addControl(new maplibregl.NavigationControl({showCompass: true, visualizePitch: true}), "bottom-right");
+  if (window.deck) { overlay = new deck.MapboxOverlay({interleaved: true, layers: []}); map.addControl(overlay); }
   map.on("style.load", addLayers);
   map.on("click", e => {
     const hit = map.queryRenderedFeatures(e.point, {layers: ["hits"]})[0];
@@ -423,11 +548,11 @@ function addLayers() {
   map.addLayer({id: "fused", type: "line", source: "fused", paint: {"line-color": "#34d399", "line-width": 3}});
   mapReady = true;
   drawAll(); drawArea(); if (lastRes) drawResult(lastRes);
-  if (!fitted && ov?.points?.length) { fitted = true; fitPoints(ov.points.map(([la, lo]) => [lo, la]), 0); }
+  if (!fitted && ov?.points?.length && ov.dataset !== "showcase") { fitted = true; fitPoints(ov.points.map(([la, lo]) => [lo, la]), 0); }
 }
 const setData = (id, d) => mapReady && map.getSource(id)?.setData(d);
 function drawAll() {
-  if (!ov) return;
+  if (!ov || ov.dataset === "showcase") return;
   setData("all", fc(ov.points.map(([la, lo, t]) => pt(lo, la, {color: colorOf[ov.event_types[t]] || "#888"}))));
 }
 function drawArea() {
@@ -441,7 +566,7 @@ function fitPoints(pts, duration = 700) {
   const trim = a => { const s = [...a].sort((x, y) => x - y), k = Math.floor(s.length * .01); return [s[k], s[s.length - 1 - k]]; };
   const [x0, x1] = trim(pts.map(p => p[0])), [y0, y1] = trim(pts.map(p => p[1]));
   const wide = innerWidth > 860;
-  map.fitBounds([[x0, y0], [x1, y1]], {padding: wide ? {left: 450, right: 80, top: 100, bottom: 60} : {top: 80, bottom: innerHeight * .6, left: 30, right: 30}, maxZoom: 17, duration});
+  map.fitBounds([[x0, y0], [x1, y1]], {pitch: 0, bearing: 0, padding: wide ? {left: 450, right: 80, top: 100, bottom: 60} : {top: 80, bottom: innerHeight * .6, left: 30, right: 30}, maxZoom: 17, duration});
 }
 function drawResult(res) {
   const obs = res.observations || [], hs = res.hotspots || [];
@@ -453,7 +578,9 @@ function drawResult(res) {
   setData("hot", fc(hs.map(h => pt(h.lon, h.lat, {share: h.count / maxc}))));
   if (res._area) setData("area", fc([circle(res._area.lat, res._area.lon, res._area.r)]));
   if (!map) return;
-  const pts = obs.map(o => [o.lon, o.lat]).concat(hs.map(h => [h.lon, h.lat]));
+  // Frame the agreeing reports; flagged outliers can be kilometres away.
+  const out = new Set(res.outliers || []);
+  const pts = obs.filter(o => !out.has(o.observation_id)).map(o => [o.lon, o.lat]).concat(hs.map(h => [h.lon, h.lat]));
   if (res.lat != null) pts.push([res.lon, res.lat]);
   if (res._area) pts.push(...circle(res._area.lat, res._area.lon, res._area.r, 8).geometry.coordinates[0]);
   fitPoints(pts);
@@ -481,15 +608,20 @@ function builderArgs() {
 }
 $("#run").onclick = () => { const [t, a, q] = builderArgs(); ask(t, a, q); };
 
-async function ask(tool, args, question) {
+function loading(question) {
   lastQ = question;
   show("answer");
-  $("#answer").innerHTML = `<button class="back" data-home>← All questions</button><div class="q">${esc(question)}</div><div class="loading"><div class="spin"></div>Searching the memory…</div>`;
-  $$("#answer [data-home]").forEach(b => b.onclick = () => { show("home"); clearResult(); });
+  $("#answer").innerHTML = `<button class="back" data-home>← Home</button><div class="q">${esc(question)}</div><div class="loading"><div class="spin"></div>Searching the memory…</div>`;
+  $$("#answer [data-home]").forEach(b => b.onclick = () => go("explore"));
+}
+async function ask(tool, args, question, pre) {
+  if (!pre) loading(question);
+  lastQ = question;
   const t0 = performance.now();
-  let res;
-  try { res = await api(`/tools/${tool}`, args); } catch { res = {ok: false, error: "The server didn't respond. Please try again in a moment."}; }
-  res._ms = performance.now() - t0; res._tool = tool;
+  let res = pre?.result;
+  if (!res) try { res = await api(`/tools/${tool}`, args); } catch { res = {ok: false, error: "The server didn't respond. Please try again in a moment."}; }
+  res._ms = performance.now() - t0; res._tool = tool; res._intro = pre?.intro; res._note = pre?.note;
+  speedToast(res);
   if (args.lat != null && args.radius_m != null) res._area = {lat: args.lat, lon: args.lon, r: args.radius_m};
   if (res.ok && (tool === "fused_location" || tool === "nearby_entities")) {
     const ids = tool === "fused_location" ? [...res.support, ...res.outliers] : res.entities.flatMap(e => e.evidence);
@@ -540,12 +672,14 @@ function facts(r) {
   const o = r.observations || [];
   const items = [];
   if (r._tool === "fused_location") items.push([`±${num(r.uncertainty_m, 1)} m`, "accuracy"], [pct(r.confidence), "confidence"], [r.outliers.length, "outliers"]);
-  else if (r._tool === "activity" || r._tool === "hotspots") items.push([num(r.count), "observations"], [r.sources?.length ?? "–", "sources"], [`${Math.round(r._ms)} ms`, "answer time"]);
-  else items.push([num(r.count ?? o.length), "observations"], [(r.sources || [...new Set(o.map(x => x.source_id))]).length, "sources"], [`${Math.round(r._ms)} ms`, "answer time"]);
+  else if (r._tool === "activity" || r._tool === "hotspots") items.push([num(r.count), "observations"], [r.sources?.length ?? "–", "sources"], [ms(r), "search time"]);
+  else items.push([num(r.count ?? o.length), "observations"], [(r.sources || [...new Set(o.map(x => x.source_id))]).length, "sources"], [ms(r), "search time"]);
   return `<div class="facts">${items.map(([v, l]) => `<div class="fact"><b>${v}</b><span>${l}</span></div>`).join("")}</div>`;
 }
 function renderAnswer(r) {
-  let h = `<button class="back" data-home>← All questions</button><div class="q">${esc(lastQ)}</div>`;
+  let h = `<button class="back" data-home>← Home</button><div class="q">${esc(lastQ)}</div>`;
+  if (r._intro) h += `<div class="ai"><div class="who">${esc(r._intro.who)}</div>${esc(r._intro.text)}</div>`;
+  if (r._note) h += `<div class="tip" style="margin:0 0 12px">${esc(r._note)}</div>`;
   if (!r.ok) {
     h += `<div class="err">${esc(r.error)}</div>`;
   } else {
@@ -579,7 +713,7 @@ function renderAnswer(r) {
   }
   h += `<button class="ghost" data-home>Ask another question</button>`;
   $("#answer").innerHTML = h;
-  $$("#answer [data-home]").forEach(b => b.onclick = () => { show("home"); clearResult(); });
+  $$("#answer [data-home]").forEach(b => b.onclick = () => go("explore"));
   $$("#answer li[data-id]").forEach(li => li.onclick = () => openEvidence(li.dataset.id));
   $$("#answer li[data-lat]").forEach(li => li.onclick = () => map?.easeTo({center: [+li.dataset.lon, +li.dataset.lat], zoom: 16}));
 }
@@ -623,19 +757,19 @@ async function openEvidence(id) {
 document.addEventListener("keydown", e => e.key === "Escape" && $("#drawer").classList.remove("on"));
 
 /* ---------- scenarios ---------- */
+const NYC_CARDS = [
+  {ic: "🗽", t: "Times Square's weekly rhythm", s: "How busy is one Manhattan block, hour by hour?", run: () => ask("activity",
+    {lat: 40.7580, lon: -73.9855, radius_m: 400, start: "2014-07-01T04:00:00Z", end: "2014-07-08T04:00:00Z", bucket_minutes: 120}, "How busy was Times Square during July 4th week, 2014?")},
+  {ic: "🎆", t: "July 4th fireworks", s: "Did rides surge near the Brooklyn Bridge?", run: () => ask("activity",
+    {lat: 40.7061, lon: -73.9969, radius_m: 1500, start: "2014-07-04T20:00:00Z", end: "2014-07-05T08:00:00Z", bucket_minutes: 30}, "What happened near the Brooklyn Bridge on the night of July 4th?")},
+  {ic: "✈️", t: "JFK, by company", s: "Which of the 5 dispatch companies served the airport?", run: () => ask("activity",
+    {lat: 40.6446, lon: -73.7797, radius_m: 2500, start: "2014-07-05T04:00:00Z", end: "2014-07-07T04:00:00Z", bucket_minutes: 120, group_by: "source_id"}, "Who picked people up at JFK over the July 4th weekend?")},
+  {ic: "🌃", t: "Saturday night hotspots", s: "Where was the city busiest at night?", run: () => ask("hotspots",
+    {lat: 40.73, lon: -73.97, radius_m: 9000, start: "2014-07-06T02:00:00Z", end: "2014-07-06T06:00:00Z", cell_m: 300, top: 15}, "Where were the busiest pickup spots on Saturday night?")},
+];
 function scenarios() {
   const end = nowIso();
-  if (ov?.dataset === "uber") return [
-    {ic: "🗽", t: "Times Square's weekly rhythm", s: "How busy is one Manhattan block, hour by hour?", run: () => ask("activity",
-      {lat: 40.7580, lon: -73.9855, radius_m: 250, start: "2014-07-07T04:00:00Z", end: "2014-07-14T04:00:00Z", bucket_minutes: 60}, "How busy was Times Square during one week in July 2014?")},
-    {ic: "🎆", t: "July 4th fireworks", s: "Did pickups surge near the fireworks?", run: () => ask("activity",
-      {lat: 40.6960, lon: -73.9950, radius_m: 800, start: "2014-07-04T20:00:00Z", end: "2014-07-05T08:00:00Z", bucket_minutes: 30}, "What happened near the Brooklyn Bridge fireworks on July 4th?")},
-    {ic: "✈️", t: "JFK by dispatch base", s: "Which of the 5 sources reported airport pickups?", run: () => ask("activity",
-      {lat: 40.6446, lon: -73.7797, radius_m: 2500, start: "2014-09-12T04:00:00Z", end: "2014-09-15T04:00:00Z", bucket_minutes: 60, group_by: "source_id"}, "Who picked people up at JFK over a weekend?")},
-    {ic: "🌃", t: "Saturday night hotspots", s: "Where was the city busiest at night?", run: () => ask("hotspots",
-      {lat: 40.73, lon: -73.95, radius_m: 15000, start: "2014-09-14T02:00:00Z", end: "2014-09-14T06:00:00Z", cell_m: 300, top: 15}, "Where were the busiest pickup spots on a Saturday night?")},
-  ];
-  return [
+  const trust = [
     {ic: "⚙️", t: "Why did Machine 47 fail?", s: "See the warning signs that came before the breakdown.", run: () => ask("history_before",
       {entity_id: "Machine_47", event_type: "failure", lookback_minutes: 60}, "Why did Machine 47 fail?")},
     {ic: "🌊", t: "Where exactly is the flood?", s: "4 sources disagree. Who should we trust?", run: () => ask("fused_location",
@@ -645,6 +779,9 @@ function scenarios() {
     {ic: "🏭", t: "The factory, last 24 hours", s: "Every reading and alert, with its source.", run: () => ask("events_near",
       {lat: 11.0172, lon: 76.9566, radius_m: 300, start: shift(end, -24), end, limit: 500}, "What happened at the factory in the last 24 hours?")},
   ];
+  if (ov?.dataset === "uber") return NYC_CARDS;
+  if (ov?.dataset === "showcase") return [...NYC_CARDS.slice(0, 2), trust[1], trust[0], NYC_CARDS[3], trust[2]];
+  return trust;
 }
 function renderScenarios() {
   const list = scenarios();
@@ -670,7 +807,7 @@ async function loadBench() {
 }
 const tbl = (cols, rows) => `<div class="tw"><table><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${esc(c.h)}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${cols.map(c => { const v = c.f(r); return `<td class="${c.n ? "n" : ""}">${v === true ? '<span class="tag good">✓ correct</span>' : v === false ? '<span class="tag bad">wrong</span>' : v}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>`;
 const bars = (items, unit = "", d = 2) => { const m = Math.max(...items.map(i => i.v)) || 1;
-  return `<div class="bars">${items.map(i => `<div class="brow"><span>${esc(i.k)}</span><div class="track"><div class="fill" style="width:${Math.max(1.5, i.v / m * 100)}%"></div></div><span class="val">${num(i.v, d)}${unit}</span></div>`).join("")}</div>`; };
+  return `<div class="bars">${items.map(i => `<div class="brow"><span>${esc(i.k)}</span><div class="track"><div class="bfill" style="width:${Math.max(1.5, i.v / m * 100)}%"></div></div><span class="val">${num(i.v, d)}${unit}</span></div>`).join("")}</div>`; };
 function renderBench(run) {
   const e = run.experiments, out = [];
   const k = [];
@@ -708,6 +845,187 @@ function renderBench(run) {
   $("#benchCards").innerHTML = out.join("");
 }
 
+
+/* ---------- speed toast ---------- */
+let toastT;
+const ms = r => { const t = r.took_ms ?? r._ms; return t < 1 ? `${t.toFixed(2)} ms` : t < 100 ? `${t.toFixed(1)} ms` : `${Math.round(t)} ms`; };
+function speedToast(r) {
+  if (r?.took_ms == null || !r.searched) return;
+  const el = $("#toast");
+  el.innerHTML = `⚡ Searched <b id="tN">0</b> records in <b>${ms(r)}</b>`;
+  el.classList.add("on");
+  const t0 = performance.now(), N = r.searched;
+  const step = t => { const f = Math.min(1, (t - t0) / 700); const n = $("#tN"); if (n) n.textContent = num(Math.round(N * (1 - (1 - f) ** 3))); if (f < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("on"), 5000);
+}
+
+/* ---------- plain-English questions ---------- */
+const EXAMPLES = ["How busy was Times Square on July 4th?", "Where were the busiest spots in Manhattan on Saturday night?",
+  "Which companies picked people up at JFK over the weekend?", "Where exactly is the flood?"];
+async function askText(q) {
+  q = (q || "").trim(); if (!q) return;
+  $("#askInput").value = q;
+  loading(q);
+  let r;
+  try { r = await api("/api/ask", {question: q}); } catch { r = {ok: false, error: "The server didn't respond. Please try again in a moment."}; }
+  if (r.ok && r.result) return ask(r.tool, r.args, q, {result: r.result, note: r.note,
+    intro: r.mode === "llm" ? {who: "AI answer", text: r.answer} : {who: "I understood your question as", text: r.understood}});
+  lastRes = null;
+  $("#answer").innerHTML = `<button class="back" data-home>← Home</button><div class="q">${esc(q)}</div>` +
+    (r.ok ? `<div class="ai"><div class="who">AI answer</div>${esc(r.answer)}</div>` : `<div class="err">${esc(r.error)}</div>`) +
+    `<button class="ghost" data-home>Ask another question</button>`;
+  $$("#answer [data-home]").forEach(b => b.onclick = () => go("explore"));
+}
+$("#askForm").onsubmit = e => { e.preventDefault(); askText($("#askInput").value); };
+function typeQuestion(q) {
+  const inp = $("#askInput"); inp.value = ""; let i = 0;
+  return new Promise(res => { const t = setInterval(() => { inp.value = q.slice(0, ++i); if (i >= q.length) { clearInterval(t); setTimeout(() => { askText(q); res(); }, 250); } }, 28); });
+}
+
+/* ---------- NYC replay ---------- */
+let RP = null, overlay = null, hourT = 8, playing = true, look = "3d", replayVis = "off", lastFrame = 0, maxV = 1, lastHourShown = -1;
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const RAMP = [[30, 58, 138], [109, 139, 255], [232, 121, 249], [251, 146, 60], [253, 224, 71]];
+const NYC_VIEW = {center: [-73.965, 40.735], zoom: 11.2, pitch: 58, bearing: -24};
+function ramp(x) {
+  x = Math.max(0, Math.min(1, Math.sqrt(x))) * (RAMP.length - 1);
+  const i = Math.min(RAMP.length - 2, Math.floor(x)), f = x - i, a = RAMP[i], b = RAMP[i + 1];
+  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, 235];
+}
+const valAt = (i, t) => { const h = Math.floor(t) % 168, f = t - Math.floor(t), v = RP.values[i]; return (v[h] * (1 - f) + v[(h + 1) % 168] * f) / 10; };
+const hourName = t => { const h = Math.floor(t) % 24; return `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`; };
+function flyNYC() {
+  if (!map || !RP) return;
+  const wide = innerWidth > 860;
+  map.easeTo({...NYC_VIEW, ...(look === "flat" ? {pitch: 0, bearing: 0} : {}), zoom: wide ? NYC_VIEW.zoom : 10.3, duration: 1400,
+    padding: wide ? {left: 430, right: 0, top: 60, bottom: 0} : {top: 0, bottom: innerHeight * .5, left: 0, right: 0}});
+}
+async function loadReplay() {
+  try { RP = await api("/api/replay"); } catch { RP = null; }
+  if (!RP?.cells?.length) { RP = null; $$('[data-tab="replay"], [data-go="replay"]').forEach(b => b.hidden = true); return; }
+  RP.idx = RP.cells.map((_, i) => i);
+  const all = RP.values.flat().sort((a, b) => a - b);
+  maxV = all[Math.floor(all.length * .995)] / 10 || 1;
+  $("#weeks").textContent = RP.weeks; $("#pickups").textContent = `${(RP.pickups / 1e6).toFixed(1)}M`;
+  drawSpark();
+  $("#moments").innerHTML = MOMENTS.map((m, i) => `<button data-i="${i}"><b>${m.l}</b><small>${m.s}</small></button>`).join("");
+  $$("#moments button").forEach(b => b.onclick = () => { const m = MOMENTS[+b.dataset.i]; hourT = m.t; playing = false; syncPlay(); if (m.view) map?.easeTo({...m.view, duration: 1500}); else flyNYC(); });
+  requestAnimationFrame(tick);
+}
+const MOMENTS = [
+  {t: 8.5, l: "Monday 8 AM", s: "Morning rush in Midtown"},
+  {t: 4 * 24 + 22, l: "Friday 10 PM", s: "Nightlife moves downtown"},
+  {t: 5 * 24 + 1, l: "Saturday 1 AM", s: "Brooklyn wakes up"},
+  {t: 6 * 24 + 6, l: "Sunday 6 AM", s: "The quietest hour"},
+  {t: 3 * 24 + 17, l: "JFK, Thursday 5 PM", s: "The airport never sleeps", view: {center: [-73.79, 40.655], zoom: 12.3, pitch: 60, bearing: 20}},
+  {t: 2 * 24 + 18, l: "Wednesday 6 PM", s: "Evening commute"},
+];
+function drawSpark() {
+  const c = RP.citywide, m = Math.max(...c), W = 336, H = 70;
+  const pts = c.map((v, i) => `${(i * W / 167).toFixed(1)},${(H - 4 - v / m * (H - 18)).toFixed(1)}`).join(" ");
+  $("#spark").innerHTML = `<defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#9b7bff" stop-opacity=".6"/><stop offset="1" stop-color="#9b7bff" stop-opacity="0"/></linearGradient></defs>` +
+    DAYS.map((d, i) => `<line x1="${i * 48}" x2="${i * 48}" y1="0" y2="${H}" stroke="var(--line)"/><text x="${i * 48 + 3}" y="10" font-size="9" fill="var(--faint)">${d.slice(0, 3)}</text>`).join("") +
+    `<polygon points="0,${H} ${pts} ${W},${H}" fill="url(#sg)"/><polyline points="${pts}" fill="none" stroke="#9b7bff" stroke-width="1.5"/><line id="head" x1="0" x2="0" y1="0" y2="${H}" stroke="#fde047" stroke-width="2"/>`;
+  $("#spark").onclick = e => { const r = $("#spark").getBoundingClientRect(); hourT = (e.clientX - r.left) / r.width * 167; };
+}
+function syncPlay() { $("#play").textContent = playing ? "❚❚" : "▶"; }
+$("#play").onclick = () => { playing = !playing; syncPlay(); };
+$("#hour").addEventListener("input", e => { hourT = +e.target.value; playing = false; syncPlay(); });
+$$("#look button").forEach(b => b.onclick = () => { look = b.dataset.look; $$("#look button").forEach(x => x.classList.toggle("on", x === b)); flyNYC(); });
+function tick(ts) {
+  const dt = Math.min(100, ts - lastFrame); lastFrame = ts;
+  if (playing && replayVis !== "off") hourT = (hourT + dt / 1000 * (replayVis === "full" ? 1.6 : 0.8)) % 168;
+  renderReplay();
+  requestAnimationFrame(tick);
+}
+function renderReplay() {
+  if (!overlay || !RP) return;
+  const t = hourT, layers = [];
+  if (replayVis !== "off") {
+    const pos = i => [RP.cells[i][1], RP.cells[i][0]];
+    if (look === "3d") layers.push(new deck.ColumnLayer({id: "cols", data: RP.idx, diskResolution: 6, radius: 270, extruded: true, coverage: .92,
+      getPosition: pos, getElevation: i => Math.min(valAt(i, t), maxV * 1.6), elevationScale: 1400 / maxV, getFillColor: i => ramp(valAt(i, t) / maxV),
+      material: {ambient: .55, diffuse: .6, shininess: 24}, updateTriggers: {getElevation: t, getFillColor: t}}));
+    else layers.push(new deck.ColumnLayer({id: "flat", data: RP.idx, diskResolution: 6, radius: 330, extruded: false, coverage: 1,
+      getPosition: pos, getFillColor: i => { const v = valAt(i, t) / maxV, c = ramp(v); c[3] = 60 + Math.min(1, Math.sqrt(v)) * 195; return c; },
+      updateTriggers: {getFillColor: t}}));
+  }
+  overlay.setProps({layers});
+  if (replayVis === "off") return;
+  $("#hour").value = t; const head = $("#head"); if (head) { head.setAttribute("x1", t * 336 / 167); head.setAttribute("x2", t * 336 / 167); }
+  const h = Math.floor(t);
+  if (h !== lastHourShown) {
+    lastHourShown = h;
+    $("#clock").innerHTML = `${DAYS[Math.floor(h / 24) % 7]} <small>${hourName(h)}</small>`;
+    $("#clockSub").textContent = `≈ ${num(RP.citywide[h % 168])} rides started across the city in this hour of a typical week`;
+  }
+}
+
+/* ---------- crash test ---------- */
+let crashBusy = false;
+const sleep = t => new Promise(r => setTimeout(r, t));
+function renderServers(r, dead = -1, back = -1) {
+  const list = r?.servers || [0, 1, 2, 3].map(i => ({id: i}));
+  $("#servers").innerHTML = list.map(x => `<div class="srv ${x.id === dead ? "dead" : x.id === back ? "up" : ""}"><div class="ic">${x.id === dead ? "💀" : "🖥️"}</div><b>Server ${x.id + 1}</b><small>${x.records != null ? (x.id === dead ? "wiped" : `${num(x.records)} records`) : "ready"}</small></div>`).join("");
+}
+function crashInit() {
+  if (!$("#servers").innerHTML) renderServers(null);
+  if (map) { setData("area", fc([circle(40.7580, -73.9855, 1500)]));
+    map.easeTo({center: [-73.9855, 40.7580], zoom: 13, pitch: 0, bearing: 0, duration: 1200, padding: innerWidth > 860 ? {left: 430, top: 60, right: 0, bottom: 0} : {top: 0, left: 0, right: 0, bottom: innerHeight * .5}}); }
+}
+$("#crashBtn").onclick = async () => {
+  if (crashBusy) return; crashBusy = true;
+  const log = $("#crashLog"); log.innerHTML = "";
+  const L = (cls, h) => { const li = document.createElement("li"); li.className = cls; li.innerHTML = h; log.appendChild(li); li.scrollIntoView({block: "nearest", behavior: "smooth"}); };
+  L("", "Asking all 4 servers: <b>how many rides started within 1.5 km of Times Square?</b>");
+  let r; try { r = await api("/api/crash", {}); } catch { r = {ok: false, error: "The server didn't respond."}; }
+  if (!r.ok) { L("bad", esc(r.error)); crashBusy = false; return; }
+  renderServers(r); await sleep(800);
+  L("good", `Answer: <b>${num(r.before.count)} rides</b>, found in ${num(r.before.ms, 1)} ms.`); await sleep(1000);
+  const k = r.killed;
+  renderServers(r, k); L("bad", `💥 <b>Server ${k + 1} unplugged.</b> Its ${num(r.servers[k].records)} records are wiped.`); await sleep(1200);
+  L("", "Asking the exact same question again…"); await sleep(800);
+  L(r.after.identical ? "good" : "bad", r.after.identical
+    ? `✅ <b>Same answer: ${num(r.after.count)} rides</b>, identical record by record (${num(r.after.ms, 1)} ms). The other servers had copies of everything server ${k + 1} held.`
+    : `⚠️ The answer changed: ${num(r.after.count)} rides.`);
+  speedToast({searched: r.records, took_ms: r.after.ms}); await sleep(1200);
+  L("", r.without_copies.lost
+    ? `Without those copies, <b>${num(r.without_copies.lost)} rides (${pct(r.without_copies.share)})</b> would have silently vanished from the answer.`
+    : `Server ${k + 1} didn't hold Times Square, but without copies every question about its part of the city would come back incomplete.`); await sleep(1200);
+  renderServers(r, -1, k);
+  L("good", `🔁 Server ${k + 1} plugged back in. It re-copied ${num(r.recovered.records)} records from its neighbours in ${num(r.recovered.ms, 0)} ms.`);
+  $("#crashBtn").textContent = "💥 Unplug another one";
+  crashBusy = false;
+};
+
+/* ---------- guided tour ---------- */
+const TOUR = [
+  {t: "This is New York City", p: "Each column is a city block. Its height is how many Uber rides started there in that hour. It's real data: 4.5 million trips.", go: () => { go("replay"); hourT = 7; playing = true; syncPlay(); }},
+  {t: "Watch a week go by", p: "Mornings light up Midtown. On Friday night the action moves downtown and into Brooklyn. The airports never sleep.", go: () => { go("replay"); hourT = 4 * 24 + 17; playing = true; syncPlay(); }},
+  {t: "Ask it a question in plain English", p: "GeoMemory finds the records that match the place and time you asked about, then answers.", go: () => { go("explore"); typeQuestion("Show pickups near Times Square on Friday night"); }},
+  {t: "Fast, and with proof", p: "Look at the speed at the top. Every dot on the map is an original record; here is where one came from: who reported it, when, and how accurate it is.", go: async () => { for (let i = 0; i < 20 && !$("#answer li[data-id]"); i++) await sleep(200); $("#answer li[data-id]")?.click(); }},
+  {t: "Whom should we believe?", p: "Four sources report a flood in slightly different places. GeoMemory weighs each one by how reliable it is, and flags the report that doesn't fit.", go: () => { $("#drawer").classList.remove("on"); askText("Where exactly is the flood?"); }},
+  {t: "What if a computer crashes?", p: "The data is spread over 4 servers. Let's unplug one in the middle of a question.", go: () => { go("crash"); setTimeout(() => $("#crashBtn").click(), 500); }},
+  {t: "That's GeoMemory", p: "A memory of places and time that AI assistants can search fast, trust, and rely on. Now try your own question!", go: () => { go("explore"); setTimeout(() => $("#askInput").focus(), 300); }},
+];
+let tourI = -1;
+function tour(i) {
+  tourI = i;
+  const el = $("#tour");
+  if (i < 0 || i >= TOUR.length) { el.classList.remove("on"); return; }
+  const s = TOUR[i];
+  el.innerHTML = `<div class="step">Step ${i + 1} of ${TOUR.length}</div><h3>${esc(s.t)}</h3><p>${esc(s.p)}</p>
+    <div class="btns"><span class="dots">${TOUR.map((_, k) => `<i class="${k === i ? "on" : ""}"></i>`).join("")}</span>
+    <button id="tClose">${i === TOUR.length - 1 ? "Close" : "Skip tour"}</button>${i < TOUR.length - 1 ? `<button class="next" id="tNext">Next →</button>` : ""}</div>`;
+  el.classList.add("on");
+  $("#tClose").onclick = () => tour(-1);
+  if ($("#tNext")) $("#tNext").onclick = () => tour(i + 1);
+  s.go();
+}
+$("#tourBtn").onclick = () => tour(0);
+document.addEventListener("keydown", e => { if (tourI >= 0 && e.key === "ArrowRight") tour(tourI + 1); });
+
 /* ---------- boot ---------- */
 async function boot() {
   try { ov = await api("/api/overview"); } catch { ov = null; }
@@ -717,7 +1035,11 @@ async function boot() {
   }
   let k = 0; ov.event_types.forEach(t => colorOf[t] = SEMANTIC[t] || PALETTE[k++ % PALETTE.length]);
   $("#stats").innerHTML = `<span class="pill"><b>${num(ov.count)}</b> records</span><span class="pill"><b>${num(ov.entities)}</b> things</span><span class="pill"><b>${ov.sources.length}</b> sources</span>`;
-  $("#dsBadge").innerHTML = `<i></i>${ov.dataset === "uber" ? "Live · 1.8M real NYC Uber pickups" : "Live demo · factory, solar farm & flood near Coimbatore"}`;
+  $("#dsBadge").innerHTML = `<i></i>${ov.dataset === "uber" ? `Live · ${num(ov.count)} real NYC Uber pickups` : ov.dataset === "showcase" ? "Live · real NYC rides + a sensor demo world" : "Live demo · factory, solar farm & flood near Coimbatore"}`;
+  if (ov.dataset === "showcase") $("#legend").style.display = "none";
+  $("#examples").innerHTML = EXAMPLES.map(q => `<button>${esc(q)}</button>`).join("");
+  $$("#examples button").forEach(b => b.onclick = () => askText(b.textContent));
+  $("#askHint").textContent = ov.llm ? "Answered by Claude, using GeoMemory's search tools." : "Uses the built-in question reader. Set ANTHROPIC_API_KEY to let Claude answer anything.";
   $("#legend").innerHTML = `<b style="color:var(--text);font-size:11px;letter-spacing:.06em;text-transform:uppercase">Event types</b>` + ov.event_types.map(t => `<div><span class="dot" style="background:${colorOf[t]}"></span>${esc(human(t))}</div>`).join("");
   $("#etype").innerHTML = `<option value="">Any</option>` + ov.event_types.map(t => `<option value="${esc(t)}">${esc(human(t))}</option>`).join("");
   $("#entities").innerHTML = ov.entity_names.map(e => `<option value="${esc(e)}">`).join("");
@@ -727,7 +1049,9 @@ async function boot() {
   $("#fend").value = toLocal(e); $("#fstart").value = toLocal(shift(e, -24 * 7));
   $("#at").value = toLocal(shift(e, -.33));
   renderScenarios();
+  await loadReplay();
   initMap();
+  show("home");
   setTimeout(() => $("#boot").classList.add("hide"), 250);
 }
 boot();

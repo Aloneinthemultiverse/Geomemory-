@@ -72,3 +72,18 @@ class FastAPITests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(HAVE_FASTAPI, "pip install fastapi httpx")
+class FastAPIShowcaseTests(unittest.TestCase):
+    def test_showcase_routes(self):
+        from geomemory.showcase import build_memory
+        c = TestClient(create_app(AgentInterface(build_memory("showcase"), "showcase")))
+        self.assertEqual(len(c.get("/api/replay").json()["citywide"]), 168)
+        r = c.post("/api/ask", json={"question": "How busy was Times Square on July 4th?"})
+        self.assertEqual((r.status_code, r.json()["tool"]), (200, "activity"))
+        self.assertEqual(c.post("/api/ask", content=b"not json").status_code, 400)
+        r = c.post("/api/crash", json={"node": 0})
+        self.assertTrue(r.json()["after"]["identical"])
+        self.assertEqual(c.post("/api/crash", json={"node": 7}).status_code, 400)
+

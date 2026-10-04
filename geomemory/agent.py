@@ -8,8 +8,10 @@ confidence) and never raises on bad input: it returns {"ok": false, ...}.
 from __future__ import annotations
 
 import json
+import os
 import math
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Iterable
@@ -185,7 +187,14 @@ class AgentInterface:
         if not isinstance(args, dict):
             return {"ok": False, "error": "arguments must be an object"}
         try:
-            return self._tools[name](args)
+            t0 = time.perf_counter()
+            res = self._tools[name](args)
+            res["took_ms"] = round((time.perf_counter() - t0) * 1e3, 3)
+            try:
+                res["searched"] = len(self.mem)
+            except TypeError:
+                pass
+            return res
         except (ToolError, ValueError) as e:
             return {"ok": False, "error": str(e)}
         except KeyError as e:
@@ -272,10 +281,11 @@ class AgentInterface:
         types = sorted({o.event_type for o in obs})
         ti = {t: i for i, t in enumerate(types)}
         step = max(1, len(obs) // limit)
-        names = sorted({o.entity_id for o in obs})
+        names = sorted({o.entity_id for o in obs}, key=lambda n: ("_trip_" in n, n))
         lats = sorted(o.location.lat for o in obs[::step])
         lons = sorted(o.location.lon for o in obs[::step])
         return {"ok": True, "dataset": self.dataset, "count": len(obs),
+                "llm": bool(os.environ.get("ANTHROPIC_API_KEY")),
                 "entities": len(names), "entity_names": names[:500],
                 "sources": sorted({o.source_id for o in obs}),
                 "event_types": types,
@@ -382,6 +392,34 @@ def keyword_baseline(observations: Iterable[Observation], query_terms: Iterable[
 
 # --- HTTP ------------------------------------------------------------------------
 
+def showcase_call(agent: AgentInterface, path: str, args, cache: dict) -> dict:
+    """POST /api/ask {question} and POST /api/crash {node?}; see showcase.py."""
+    from . import showcase
+    if not isinstance(args, dict):
+        return {"ok": False, "error": "body must be a JSON object"}
+    if path.rstrip("/") == "/api/ask":
+        q = args.get("question")
+        return showcase.ask(agent, q if isinstance(q, str) else "")
+    if path.rstrip("/") == "/api/crash":
+        node = args.get("node")
+        if node is not None and not isinstance(node, int):
+            return {"ok": False, "error": "node must be an integer"}
+        with _crash_lock:
+            if "crash" not in cache:
+                ct = showcase.CrashTest(agent.mem)
+                if not ct.n:
+                    return {"ok": False, "error": "the crash test needs the NYC pickups loaded"}
+                cache["crash"] = ct
+            try:
+                return cache["crash"].run(node)
+            except ValueError as e:
+                return {"ok": False, "error": str(e)}
+    return {"ok": False, "error": "not found"}
+
+
+_crash_lock = threading.Lock()
+
+
 def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
           max_body: int = 1 << 20, results_dir: str | None = None,
           ) -> tuple[ThreadingHTTPServer, threading.Thread]:
@@ -419,6 +457,15 @@ def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
                 if "overview" not in cache:
                     cache["overview"] = agent.overview()
                 self._send(200, cache["overview"])
+            elif path == "/api/replay":
+                from .showcase import REPLAY_FILE
+                data = REPLAY_FILE.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
             elif path == "/api/results":
                 runs = {}
                 if results_dir:
@@ -435,7 +482,7 @@ def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
                 self._send(404, {"ok": False, "error": "not found"})
 
         def do_POST(self):
-            if not self.path.startswith("/tools/"):
+            if not self.path.startswith(("/tools/", "/api/ask", "/api/crash")):
                 return self._send(404, {"ok": False, "error": "not found"})
             try:
                 n = int(self.headers.get("Content-Length", "0"))
@@ -450,7 +497,10 @@ def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
                 args = json.loads(self.rfile.read(n) or b"{}")
             except (ValueError, UnicodeDecodeError):
                 return self._send(400, {"ok": False, "error": "body must be JSON"})
-            res = agent.dispatch(self.path[len("/tools/"):], args)
+            if self.path.startswith("/api/"):
+                res = showcase_call(agent, self.path, args, cache)
+            else:
+                res = agent.dispatch(self.path[len("/tools/"):], args)
             self._send(200 if res.get("ok") else 400, res)
 
     class Server(ThreadingHTTPServer):

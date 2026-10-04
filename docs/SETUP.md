@@ -112,6 +112,7 @@ docker compose down               # stop (add -v to also delete the database)
 | Docker: "Cannot connect to the Docker daemon" | Start Docker Desktop and wait until it says "running" |
 | Spark: `JAVA_HOME is not set` | Install Java 17 and reopen the terminal. On macOS: `export JAVA_HOME=$(/usr/libexec/java_home -v 17)`. |
 | The first Spark run is slow | It downloads the Sedona jars (about 50 MB) once and caches them in `~/.ivy2` |
-| The map is blank | Map tiles come from openfreemap.org and need internet. Queries and results still work offline. |
+| The map is blank | Map tiles (CARTO) and the 3D layer (deck.gl) load from the internet. Queries and results still work offline. |
+| Let an AI answer the questions | Optional: `export ANTHROPIC_API_KEY=...` (PowerShell: `$env:ANTHROPIC_API_KEY="..."`) before `./run.sh`. Without it, a built-in reader handles the questions. |
 | The Uber demo runs out of memory | Load one month: `python -m geomemory.demo --dataset uber --months jul14` |
 | Reset the database | `docker compose down -v && docker compose up -d db kafka` |

@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import ConfigDict, create_model
 
-from .agent import TOOLS, AgentInterface
+from .agent import TOOLS, AgentInterface, showcase_call
 
 _TYPES = {"number": float, "integer": int, "string": str}
 UI = Path(__file__).parent / "ui" / "index.html"
@@ -43,6 +43,16 @@ def create_app(agent: AgentInterface, results_dir: str | None = None,
                               "Every answer carries the observation ids, sources and "
                               "confidence that support it.")
     overview_cache: dict = {}
+    cache: dict = {}
+
+    async def _body(request: Request):
+        try:
+            return json.loads(await request.body() or b"{}")
+        except ValueError:
+            return None
+
+    def _json(res: dict):
+        return JSONResponse(res, status_code=200 if res.get("ok") else 400)
 
     @app.middleware("http")
     async def limit_body(request: Request, call_next):
@@ -67,6 +77,20 @@ def create_app(agent: AgentInterface, results_dir: str | None = None,
         if "v" not in overview_cache:
             overview_cache["v"] = agent.overview()
         return overview_cache["v"]
+
+    @app.get("/api/replay", summary="NYC time-lapse: pickups per cell and hour of the week")
+    def replay_data():
+        from .showcase import REPLAY_FILE
+        return Response(REPLAY_FILE.read_bytes(), media_type="application/json",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+    @app.post("/api/ask", summary="Answer a plain-English question (LLM if ANTHROPIC_API_KEY is set)")
+    async def ask_route(request: Request):
+        return _json(showcase_call(agent, "/api/ask", await _body(request), cache))
+
+    @app.post("/api/crash", summary="Crash test: kill one of 4 servers mid-question")
+    async def crash_route(request: Request):
+        return _json(showcase_call(agent, "/api/crash", await _body(request), cache))
 
     @app.get("/api/results", summary="Benchmark results")
     def results():
@@ -103,11 +127,9 @@ def create_app(agent: AgentInterface, results_dir: str | None = None,
 
 def main(argv=None) -> None:
     import uvicorn
-    from .index import QuadTreeIndex
-    from .store import GeoMemory
     ap = argparse.ArgumentParser(description="GeoMemory FastAPI service")
     ap.add_argument("--backend", choices=["memory", "postgis"], default="memory")
-    ap.add_argument("--dataset", choices=["synthetic", "uber"], default="synthetic")
+    ap.add_argument("--dataset", choices=["showcase", "synthetic", "uber"], default="showcase")
     ap.add_argument("--months", default="jul14,sep14")
     ap.add_argument("--table", default="observations", help="PostGIS table")
     ap.add_argument("--host", default="127.0.0.1")
@@ -118,13 +140,8 @@ def main(argv=None) -> None:
         from .backends.postgis import PostGISStore
         mem = PostGISStore(table=a.table)
     else:
-        mem = GeoMemory(QuadTreeIndex())
-        if a.dataset == "uber":
-            from .datasets import load_uber
-            mem.ingest_many(load_uber(months=tuple(a.months.split(","))))
-        else:
-            from .demo import build_world
-            mem.ingest_many(build_world())
+        from .showcase import build_memory
+        mem = build_memory(a.dataset, a.months)
     app = create_app(AgentInterface(mem, a.dataset), a.results)
     print(f"GeoMemory API on http://{a.host}:{a.port}  (docs at /docs)")
     uvicorn.run(app, host=a.host, port=a.port, log_level="warning")

@@ -14,7 +14,7 @@ You only need Python 3.10 or newer. The first run sets itself up (about a minute
 
 | Command | What you get |
 |---|---|
-| `./run.sh` | Map UI with the demo world (factory, solar farm, flood) |
+| `./run.sh` | The map UI: a 3D replay of NYC, plain-English questions, a crash test, and a guided tour (no download needed) |
 | `./run.sh uber` | The same UI over 1.8M real NYC Uber pickups (downloads ~200 MB once) |
 | `./run.sh full` | Everything: PostGIS, AGE and Kafka in Docker, all datasets, the full test suite, then the UI |
 
@@ -30,19 +30,25 @@ Step-by-step instructions for Windows, macOS and Linux, with troubleshooting, ar
 python3 -m geomemory.demo          # open http://127.0.0.1:8765
 ```
 
-This loads a demo world around Coimbatore. It has a factory where Machine_47 fails, a solar farm with panels getting worse, delivery trucks, and a flood reported by sources that disagree. Use the map dashboard to:
-- **Explore:** pick a spot on the map and a time window, then ask what happened there or what changed. You can also ask what happened before an event, or combine conflicting sources into one location. Every result shows its source and confidence, and clicking a result opens its full provenance chain.
-- **Benchmarks:** view the E1–E6 results as charts and tables. Switch between scales.
+Press **▶ Take the 60-second tour** for a guided walk-through. Here's what you can do:
 
-**On real data:** `python3 -m geomemory.demo --dataset uber` loads 1.8M real NYC Uber pickups (July and September 2014). Its scenarios include:
-- Times Square's weekly rhythm
-- Brooklyn Heights on July 4th (near the fireworks, pickups were 2.7× a normal Friday)
-- JFK pickups split by dispatch base
-- Saturday night hotspots
+- **Watch NYC breathe.** A 3D time-lapse of a typical week in New York, built from all 4.5M real Uber pickups (Apr–Sep 2014). Each column is a ~650 m block, and its height is the number of rides starting there in that hour. Press play, or jump to Monday rush hour or Friday night.
+- **Ask in plain English.** For example, "How busy was Times Square on July 4th?" or "Which companies picked people up at JFK over the weekend?". Every answer shows the original records behind it, and clicking one shows where it came from.
+  - By default a small built-in reader turns the question into a search.
+  - Set `ANTHROPIC_API_KEY` (optional) and Claude answers instead, calling GeoMemory's tools itself. The key stays in your environment; it is never stored or sent anywhere but the Anthropic API.
+- **Speed counter.** Every answer shows how many records were searched and how long it took, usually a few milliseconds.
+- **Crash test.** The NYC rides are split over 4 servers, and each piece is stored on 2 of them. Unplug one in the middle of a question and the answer doesn't change, record for record. The page also shows how much would have been lost without the copies.
+- **Whom to trust.** Four sources report a flood in slightly different places. GeoMemory weights each by its reliability and flags the citizen report that doesn't fit.
+- **Benchmarks.** The measured results of experiments E1–E7.
 
-Every query answers in under 0.3 s.
+The default data works offline from the repo; nothing is downloaded. It combines:
+- a 20% sample of real Uber pickups during July 4th week 2014 (24,804 rides, with their original record ids);
+- the replay grid built from all 4.5M pickups;
+- a small sensor world near Coimbatore (a factory where Machine_47 fails, a solar farm, a flood).
 
-It uses MapLibre and OpenFreeMap tiles (no API key needed), and has light and dark mode. It works on phone-sized screens.
+To rebuild the NYC pack from the raw data, run `python -m geomemory.showcase build`. With `--dataset uber`, the questions run over 1.8M real pickups instead.
+
+It uses MapLibre with CARTO tiles and deck.gl for the 3D layer (no API keys needed). It has light and dark mode and works on phones.
 
 ## Status: Phases 1–5 done
 

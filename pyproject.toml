@@ -29,4 +29,4 @@ geomemory-data = "geomemory.datasets:main"
 include = ["geomemory*"]
 
 [tool.setuptools.package-data]
-geomemory = ["ui/*.html"]
+geomemory = ["ui/*.html", "data/*"]
