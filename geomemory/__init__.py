@@ -1,4 +1,4 @@
-"""GeoMemory: spatial-temporal memory and provenance engine (Phase 1 core)."""
+"""GeoMemory: spatial-temporal memory and provenance engine."""
 from .index import GridIndex, SpatialIndex, TemporalIndex, geohash_encode
 from .model import Observation, Point, Provenance, haversine_m
 from .store import GeoMemory

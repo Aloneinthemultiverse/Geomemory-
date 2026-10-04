@@ -57,25 +57,38 @@ class GeoMemory:
     # --- spatial (§12.1-12.3) -------------------------------------------
 
     def radius(self, center: Point, radius_m: float) -> list[Observation]:
-        cands = self._spatial.candidates_in_bbox(*bbox_for_radius(center, radius_m))
-        return [
-            o for o in (self._obs[k] for k in cands)
-            if haversine_m(center, o.location) <= radius_m
-        ]
+        if radius_m < 0:
+            raise ValueError("radius_m must be >= 0")
+        seen: set[str] = set()
+        out = []
+        for box in bbox_for_radius(center, radius_m):
+            for k in self._spatial.candidates_in_bbox(*box):
+                if k in seen:
+                    continue
+                seen.add(k)
+                o = self._obs[k]
+                if haversine_m(center, o.location) <= radius_m:
+                    out.append(o)
+        return out
 
     def nearest(self, center: Point, k: int = 10) -> list[Observation]:
+        if k <= 0 or not self._obs:
+            return []
         # Expand the search radius until k hits are found, then rank exactly.
         r = 100.0
         while r < 2.1e7:
             hits = self.radius(center, r)
             if len(hits) >= k:
-                return heapq.nsmallest(k, hits, key=lambda o: haversine_m(center, o.location))
+                return heapq.nsmallest(
+                    k, hits, key=lambda o: (haversine_m(center, o.location), o.observation_id))
             r *= 4
         return heapq.nsmallest(
-            k, self._obs.values(), key=lambda o: haversine_m(center, o.location)
-        )
+            k, self._obs.values(),
+            key=lambda o: (haversine_m(center, o.location), o.observation_id))
 
     def within_polygon(self, ring: list[Point]) -> list[Observation]:
+        if len(ring) < 3:
+            raise ValueError("polygon needs at least 3 vertices")
         lats, lons = [p.lat for p in ring], [p.lon for p in ring]
         cands = self._spatial.candidates_in_bbox(min(lats), max(lats), min(lons), max(lons))
         return [o for o in (self._obs[k] for k in cands) if _point_in_polygon(o.location, ring)]
@@ -83,6 +96,8 @@ class GeoMemory:
     # --- temporal (§12.6-12.8) ------------------------------------------
 
     def between(self, start: datetime, end: datetime) -> list[Observation]:
+        if end < start:
+            return []
         return [self._obs[k] for k in self._temporal.range(start, end)]
 
     def radius_between(

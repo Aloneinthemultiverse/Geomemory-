@@ -98,14 +98,19 @@ class TemporalIndex:
         return self._keys[lo:hi]
 
 
-def bbox_for_radius(center: Point, radius_m: float) -> tuple[float, float, float, float]:
+def bbox_for_radius(center: Point, radius_m: float) -> list[tuple[float, float, float, float]]:
+    """Bounding boxes covering a radius. Split in two across the antimeridian."""
     dlat = math.degrees(radius_m / EARTH_RADIUS_M)
     lat_lo, lat_hi = max(-90.0, center.lat - dlat), min(90.0, center.lat + dlat)
     cos_lat = math.cos(math.radians(max(abs(lat_lo), abs(lat_hi))))
-    if cos_lat < 1e-9 or radius_m / EARTH_RADIUS_M / cos_lat >= math.pi:
-        return lat_lo, lat_hi, -180.0, 180.0
-    dlon = math.degrees(radius_m / (EARTH_RADIUS_M * cos_lat))
+    if lat_hi >= 90.0 or lat_lo <= -90.0 or cos_lat < 1e-9 \
+            or radius_m / (EARTH_RADIUS_M * cos_lat) >= math.pi:
+        return [(lat_lo, lat_hi, -180.0, 180.0)]
+    dlon = math.degrees(math.asin(min(1.0, math.sin(radius_m / EARTH_RADIUS_M) / cos_lat)))
+    dlon = max(dlon, math.degrees(radius_m / (EARTH_RADIUS_M * cos_lat)))
     lon_lo, lon_hi = center.lon - dlon, center.lon + dlon
-    if lon_lo < -180.0 or lon_hi > 180.0:  # crosses antimeridian; keep it simple
-        return lat_lo, lat_hi, -180.0, 180.0
-    return lat_lo, lat_hi, lon_lo, lon_hi
+    if lon_lo < -180.0:
+        return [(lat_lo, lat_hi, -180.0, lon_hi), (lat_lo, lat_hi, lon_lo + 360.0, 180.0)]
+    if lon_hi > 180.0:
+        return [(lat_lo, lat_hi, lon_lo, 180.0), (lat_lo, lat_hi, -180.0, lon_hi - 360.0)]
+    return [(lat_lo, lat_hi, lon_lo, lon_hi)]
