@@ -230,6 +230,22 @@ class AgentInterface:
         return {"ok": True, "entity_id": entity,
                 "entities": sorted(found.values(), key=lambda x: (x["distance_m"], x["entity_id"]))}
 
+    def overview(self, limit: int = 5000) -> dict:
+        """Dataset summary plus a sample for the UI's initial map."""
+        far_past = datetime(1, 1, 2, tzinfo=timezone.utc)
+        far_future = datetime(9999, 12, 30, tzinfo=timezone.utc)
+        obs = self.mem.between(far_past, far_future)
+        if not obs:
+            return {"ok": True, "count": 0, "observations": [], "event_types": [],
+                    "sources": [], "entities": 0}
+        step = max(1, len(obs) // limit)
+        return {"ok": True, "count": len(obs), "entities": len({o.entity_id for o in obs}),
+                "sources": sorted({o.source_id for o in obs}),
+                "event_types": sorted({o.event_type for o in obs}),
+                "start": obs[0].timestamp.isoformat(), "end": obs[-1].timestamp.isoformat(),
+                "sampled": step > 1,
+                "observations": [_obs_json(o) for o in obs[::step][:limit]]}
+
     def evidence(self, args: dict) -> dict:
         oid = _str(args, "observation_id")
         root = self.mem.get(oid)
@@ -278,8 +294,13 @@ def keyword_baseline(observations: Iterable[Observation], query_terms: Iterable[
 # --- HTTP ------------------------------------------------------------------------
 
 def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
-          max_body: int = 1 << 20) -> tuple[ThreadingHTTPServer, threading.Thread]:
-    """GET /tools lists schemas; POST /tools/<name> with a JSON body calls one."""
+          max_body: int = 1 << 20, results_dir: str | None = None,
+          ) -> tuple[ThreadingHTTPServer, threading.Thread]:
+    """GET / serves the web UI, GET /api/overview a dataset summary,
+    GET /api/results the latest benchmark results, GET /tools the tool
+    schemas; POST /tools/<name> with a JSON body calls one tool."""
+    from pathlib import Path
+    ui_html = (Path(__file__).parent / "ui" / "index.html").read_bytes()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):  # keep test output quiet
@@ -294,8 +315,27 @@ def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
             self.wfile.write(data)
 
         def do_GET(self):
-            if self.path == "/tools":
+            path = self.path.split("?", 1)[0]
+            if path in ("/", "/index.html"):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(ui_html)))
+                self.end_headers()
+                self.wfile.write(ui_html)
+            elif path == "/tools":
                 self._send(200, {"tools": TOOLS})
+            elif path == "/api/overview":
+                self._send(200, agent.overview())
+            elif path == "/api/results":
+                runs = {}
+                if results_dir:
+                    for f in sorted(Path(results_dir).glob("**/results.json")):
+                        try:
+                            data = json.loads(f.read_text())
+                        except (OSError, ValueError):
+                            continue
+                        runs[data.get("scale", f.parent.name)] = data
+                self._send(200, {"ok": True, "runs": runs})
             else:
                 self._send(404, {"ok": False, "error": "not found"})
 

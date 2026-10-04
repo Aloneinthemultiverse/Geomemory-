@@ -197,6 +197,19 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.call("/tools/evidence", raw=b" " * 20_000)[0], 413)
         self.assertEqual(self.call("/tools/evidence", {"observation_id": "missing"})[0], 400)
 
+    def test_ui_and_overview(self):
+        req = urllib.request.urlopen(self.base + "/", timeout=5)
+        html = req.read().decode()
+        self.assertEqual(req.status, 200)
+        self.assertIn("<title>GeoMemory</title>", html)
+        for tool in ("events_near", "what_changed", "history_before", "fused_location"):
+            self.assertIn(tool, html)
+        code, body = self.call("/api/overview")
+        self.assertEqual((code, body["count"], body["entities"]), (200, 5, 2))
+        self.assertIn("failure", body["event_types"])
+        code, body = self.call("/api/results")
+        self.assertEqual((code, body["runs"]), (200, {}))
+
     def test_concurrent_requests(self):
         from concurrent.futures import ThreadPoolExecutor
         def one(_):

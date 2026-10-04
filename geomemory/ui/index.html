@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GeoMemory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f1f3f6; --line: #e3e6eb;
+  --text: #15181d; --muted: #646b76; --faint: #9aa1ab;
+  --accent: #2563eb; --accent-soft: #e6eefe; --danger: #dc2626; --ok: #16a34a; --warn: #d97706;
+  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 4px 16px rgba(16,24,40,.06);
+  --radius: 10px;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1014; --panel: #151a20; --panel-2: #1c222a; --line: #262e38;
+    --text: #e8ebef; --muted: #9aa3ae; --faint: #66707c;
+    --accent: #5b8cff; --accent-soft: #1b2740; --shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1014; --panel: #151a20; --panel-2: #1c222a; --line: #262e38;
+  --text: #e8ebef; --muted: #9aa3ae; --faint: #66707c;
+  --accent: #5b8cff; --accent-soft: #1b2740; --shadow: 0 1px 2px rgba(0,0,0,.4);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 Inter, system-ui, sans-serif;
+       display: flex; flex-direction: column; }
+button, input, select { font: inherit; color: inherit; }
+
+/* header */
+header { display: flex; align-items: center; gap: 20px; padding: 10px 16px;
+         background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
+.brand svg { color: var(--accent); }
+.brand small { font-weight: 500; color: var(--muted); font-size: 12px; }
+nav { display: flex; gap: 4px; background: var(--panel-2); padding: 3px; border-radius: 8px; }
+nav button { border: 0; background: none; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+             color: var(--muted); font-weight: 500; }
+nav button.on { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+.stats { display: flex; gap: 16px; margin-left: auto; color: var(--muted); font-size: 12.5px; }
+.stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.icon-btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+            width: 32px; height: 32px; cursor: pointer; display: grid; place-items: center; }
+
+/* explore layout */
+main { flex: 1; min-height: 0; display: none; }
+main.on { display: grid; }
+#explore { grid-template-columns: 340px 1fr 380px; }
+aside { background: var(--panel); border-right: 1px solid var(--line); overflow: auto; }
+aside.right { border-right: 0; border-left: 1px solid var(--line); }
+.section { padding: 16px; border-bottom: 1px solid var(--line); }
+.section h3 { margin: 0 0 12px; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase;
+              color: var(--muted); font-weight: 600; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--panel-2);
+       padding: 3px; border-radius: 8px; margin-bottom: 14px; }
+.seg button { border: 0; background: none; padding: 6px 4px; border-radius: 6px; cursor: pointer;
+              font-size: 12.5px; color: var(--muted); font-weight: 500; }
+.seg button.on { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+.desc { color: var(--muted); font-size: 12.5px; margin: -4px 0 14px; }
+label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; font-weight: 500; }
+input[type=text], input[type=number], input[type=datetime-local], select {
+  width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--panel); outline: none; }
+input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.range-row { display: flex; align-items: center; gap: 10px; }
+.range-row input { flex: 1; accent-color: var(--accent); }
+.range-row output { font-family: var(--mono); font-size: 12px; min-width: 64px; text-align: right; }
+.hint { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted);
+        background: var(--accent-soft); border-radius: 7px; padding: 7px 9px; margin-top: 10px; }
+.primary { width: 100%; margin-top: 16px; padding: 9px; border: 0; border-radius: 8px;
+           background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
+.primary:hover { filter: brightness(1.07); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 3px 8px; border-radius: 99px; background: var(--panel-2);
+        border: 1px solid var(--line); cursor: pointer; }
+.legend { display: grid; gap: 6px; font-size: 12.5px; }
+.legend div { display: flex; align-items: center; gap: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+
+/* map */
+#mapwrap { position: relative; min-width: 0; }
+#map { position: absolute; inset: 0; }
+#mapmsg { position: absolute; inset: 0; display: none; place-items: center; text-align: center;
+          color: var(--muted); padding: 24px; }
+.map-badge { position: absolute; top: 12px; left: 12px; background: var(--panel);
+             border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+             font-size: 12px; box-shadow: var(--shadow); color: var(--muted); }
+
+/* results */
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kpi { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
+.kpi b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+.kpi span { font-size: 11.5px; color: var(--muted); }
+.empty { color: var(--muted); text-align: center; padding: 40px 16px; font-size: 13px; }
+.empty svg { color: var(--faint); margin-bottom: 8px; }
+.err { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent);
+       padding: 8px 10px; border-radius: 7px; font-size: 13px; }
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li { display: grid; grid-template-columns: 14px 1fr; gap: 10px; padding: 9px 16px;
+               cursor: pointer; border-bottom: 1px solid var(--line); }
+.timeline li:hover, .timeline li.sel { background: var(--panel-2); }
+.timeline .dot { margin-top: 5px; }
+.t-top { display: flex; justify-content: space-between; gap: 8px; }
+.t-ev { font-weight: 600; }
+.t-time { color: var(--muted); font-size: 12px; font-family: var(--mono); white-space: nowrap; }
+.t-meta { font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+.conf { display: inline-flex; align-items: center; gap: 5px; }
+.conf i { width: 36px; height: 4px; background: var(--line); border-radius: 2px; position: relative; }
+.conf i::after { content: ""; position: absolute; inset: 0; width: var(--w); background: var(--ok);
+                 border-radius: 2px; }
+.changes { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.changes li { background: var(--panel-2); border-radius: 7px; padding: 7px 9px; font-size: 12.5px; }
+.arrow { color: var(--faint); margin: 0 4px; }
+.mono { font-family: var(--mono); font-size: 12px; }
+
+/* evidence drawer */
+#drawer { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 100%); background: var(--panel);
+          border-left: 1px solid var(--line); box-shadow: -8px 0 30px rgba(0,0,0,.12);
+          transform: translateX(100%); transition: transform .2s ease; z-index: 10; overflow: auto; }
+#drawer.on { transform: none; }
+.lineage { list-style: none; margin: 0; padding: 0; position: relative; }
+.lineage li { position: relative; padding: 0 0 16px 22px; }
+.lineage li::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: -6px; width: 2px;
+                      background: var(--line); }
+.lineage li:last-child::before { display: none; }
+.lineage li::after { content: ""; position: absolute; left: 0; top: 3px; width: 12px; height: 12px;
+                     border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; font-size: 12.5px; margin-top: 6px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-all; }
+
+/* benchmarks */
+#bench { display: none; overflow: auto; padding: 24px; }
+#bench.on { display: block; }
+.bench-wrap { max-width: 1100px; margin: 0 auto; }
+.bench-head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.bench-head h2 { margin: 0; font-size: 20px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.card h3 { margin: 0 0 4px; font-size: 15px; }
+.card p.q { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px;
+     border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td.n { text-align: right; } th.n { text-align: right; }
+.tablewrap { overflow-x: auto; }
+.bad { color: var(--danger); font-weight: 600; }
+.good { color: var(--ok); }
+.bars { display: grid; gap: 8px; }
+.bar { display: grid; grid-template-columns: 130px 1fr 72px; gap: 10px; align-items: center; font-size: 12.5px; }
+.bar .track { height: 14px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.bar .fill { height: 100%; background: var(--accent); border-radius: 4px; }
+.bar .val { text-align: right; font-family: var(--mono); font-size: 12px; }
+
+@media (max-width: 1100px) {
+  #explore { grid-template-columns: 300px 1fr; }
+  #explore aside.right { grid-column: 1 / -1; max-height: 45vh; border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 720px) {
+  #explore { grid-template-columns: 1fr; grid-template-rows: auto 50vh auto; }
+  aside { border-right: 0; }
+  .stats { display: none; }
+  .grid2 { grid-template-columns: 1fr; }
+  #bench { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><path d="M4 21h16" opacity=".5"/></svg>
+    GeoMemory <small>spatial-temporal memory</small>
+  </div>
+  <nav>
+    <button class="on" data-tab="explore">Explore</button>
+    <button data-tab="bench">Benchmarks</button>
+  </nav>
+  <div class="stats" id="stats"></div>
+  <button class="icon-btn" id="theme" title="Toggle theme" aria-label="Toggle theme">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+  </button>
+</header>
+
+<main id="explore" class="on">
+  <aside>
+    <div class="section">
+      <h3>Ask GeoMemory</h3>
+      <div class="seg" id="modes">
+        <button class="on" data-mode="area">Area</button>
+        <button data-mode="entity">Entity</button>
+        <button data-mode="fuse">Fuse</button>
+      </div>
+
+      <div data-panel="area">
+        <p class="desc">What happened in a place during a time window?</p>
+        <div class="seg" id="areaTool" style="grid-template-columns:1fr 1fr">
+          <button class="on" data-tool="events_near">Events</button>
+          <button data-tool="what_changed">What changed</button>
+        </div>
+        <div class="row">
+          <div><label>Latitude</label><input type="number" id="lat" step="0.0001"></div>
+          <div><label>Longitude</label><input type="number" id="lon" step="0.0001"></div>
+        </div>
+        <div class="hint"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7 18 2-8 8-2z"/></svg>Click the map to move the search centre</div>
+        <label>Radius</label>
+        <div class="range-row"><input type="range" id="radius" min="1" max="100" value="40"><output id="radiusOut"></output></div>
+        <label>From (UTC)</label><input type="datetime-local" id="start">
+        <label>To (UTC)</label><input type="datetime-local" id="end">
+        <div class="chips" style="margin-top:8px" id="quickRanges">
+          <span class="chip" data-hours="1">1 h</span><span class="chip" data-hours="24">24 h</span>
+          <span class="chip" data-hours="168">7 d</span><span class="chip" data-hours="720">30 d</span>
+          <span class="chip" data-hours="1440">60 d</span>
+        </div>
+        <div id="areaFilters">
+          <label>Event type</label><select id="etype"><option value="">Any</option></select>
+          <label>Minimum confidence</label>
+          <div class="range-row"><input type="range" id="minconf" min="0" max="100" value="0"><output id="minconfOut"></output></div>
+        </div>
+      </div>
+
+      <div data-panel="entity" hidden>
+        <p class="desc">What happened to something, and what was around it?</p>
+        <div class="seg" id="entityTool" style="grid-template-columns:1fr 1fr">
+          <button class="on" data-tool="history_before">Before an event</button>
+          <button data-tool="nearby_entities">Nearby</button>
+        </div>
+        <label>Entity</label><input type="text" id="entity" list="entities" value="Machine_47">
+        <datalist id="entities"></datalist>
+        <div id="beforeFields">
+          <label>Event</label><input type="text" id="anchor" value="failure">
+          <label>Look back (minutes)</label><input type="number" id="lookback" value="60" min="0">
+        </div>
+        <div id="nearbyFields" hidden>
+          <label>At (UTC)</label><input type="datetime-local" id="at">
+          <div class="row">
+            <div><label>Radius (m)</label><input type="number" id="nradius" value="50" min="0"></div>
+            <div><label>Window (min)</label><input type="number" id="nwindow" value="30" min="0"></div>
+          </div>
+        </div>
+      </div>
+
+      <div data-panel="fuse" hidden>
+        <p class="desc">Sources disagree about where something is. Combine them by trust and see which are outliers.</p>
+        <label>Entity</label><input type="text" id="fentity" list="entities" value="Flood_Event_1">
+        <label>From (UTC)</label><input type="datetime-local" id="fstart">
+        <label>To (UTC)</label><input type="datetime-local" id="fend">
+      </div>
+
+      <button class="primary" id="run">Run query</button>
+    </div>
+
+    <div class="section">
+      <h3>Try a scenario</h3>
+      <div class="chips" id="scenarios">
+        <span class="chip" data-s="m47">Why did Machine_47 fail?</span>
+        <span class="chip" data-s="flood">Where is the flood?</span>
+        <span class="chip" data-s="solar">Solar farm changes</span>
+        <span class="chip" data-s="factory">Factory, last 24 h</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Event types</h3>
+      <div class="legend" id="legend"></div>
+    </div>
+  </aside>
+
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div id="mapmsg"></div>
+    <div class="map-badge" id="mapBadge">Loading…</div>
+  </div>
+
+  <aside class="right" id="results">
+    <div class="empty">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <div>Run a query or pick a scenario.<br>Every result shows its source and confidence.</div>
+    </div>
+  </aside>
+</main>
+
+<main id="bench"><div class="bench-wrap" id="benchBody"><div class="empty">Loading benchmark results…</div></div></main>
+
+<div id="drawer"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const PALETTE = ["#2563eb","#dc2626","#16a34a","#d97706","#7c3aed","#0891b2","#db2777","#65a30d","#ea580c","#4f46e5","#0d9488","#a16207","#9333ea"];
+const colorOf = {};
+// Meaning-based colours: bad things red/orange, routine things muted.
+const SEMANTIC = {failure: "#dc2626", crack: "#b91c1c", closed: "#be123c", flood_extent: "#0284c7",
+  temperature_anomaly: "#ea580c", vibration_anomaly: "#d97706", hotspot: "#f59e0b",
+  maintenance: "#7c3aed", normal: "#16a34a", telemetry: "#94a3b8", position: "#64748b"};
+let overview = null, map = null, mapReady = false, mode = "area", lastResult = null, selected = null;
+const state = { lat: 11.0168, lon: 76.9558, areaTool: "events_near", entityTool: "history_before" };
+
+/* ---------- utilities ---------- */
+const radiusM = () => Math.round(10 ** (1 + (+$("#radius").value) / 100 * 4.3)); // 10 m .. 200 km
+const fmtM = m => m >= 1000 ? `${(m/1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${m} m`;
+const toLocal = iso => iso ? iso.slice(0, 16) : "";
+const fromLocal = v => v ? new Date(v + ":00Z").toISOString() : null;
+const fmtTime = iso => { const d = new Date(iso); return d.toISOString().slice(5, 16).replace("T", " "); };
+const fmtNum = (x, d = 2) => x == null ? "–" : typeof x === "number" ? x.toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: Number.isInteger(x) ? 0 : Math.min(d, 2)}) : esc(x);
+const nowIso = () => overview?.end || new Date().toISOString();
+const shift = (iso, hours) => new Date(new Date(iso).getTime() + hours * 3600e3).toISOString();
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {});
+  return r.json();
+}
+
+function circle(lat, lon, m, n = 72) {
+  const R = 6371008.8, pts = [];
+  for (let i = 0; i <= n; i++) {
+    const b = 2 * Math.PI * i / n, d = m / R, la = lat * Math.PI / 180, lo = lon * Math.PI / 180;
+    const la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(b));
+    const lo2 = lo + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2));
+    pts.push([lo2 * 180 / Math.PI, la2 * 180 / Math.PI]);
+  }
+  return {type: "Feature", geometry: {type: "Polygon", coordinates: [pts]}, properties: {}};
+}
+const fc = features => ({type: "FeatureCollection", features});
+const ptFeature = o => ({type: "Feature", geometry: {type: "Point", coordinates: [o.lon, o.lat]},
+  properties: {id: o.observation_id, ev: o.event_type, color: colorOf[o.event_type] || "#888",
+               conf: o.confidence, entity: o.entity_id, src: o.source_id}});
+
+/* ---------- theme & tabs ---------- */
+$("#theme").onclick = () => {
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const cur = document.documentElement.dataset.theme || (dark ? "dark" : "light");
+  document.documentElement.dataset.theme = cur === "dark" ? "light" : "dark";
+  try { localStorage.setItem("gm-theme", document.documentElement.dataset.theme); } catch {}
+  setMapStyle();
+};
+try { const t = localStorage.getItem("gm-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; };
+
+$$("nav button").forEach(b => b.onclick = () => {
+  $$("nav button").forEach(x => x.classList.toggle("on", x === b));
+  $("#explore").classList.toggle("on", b.dataset.tab === "explore");
+  $("#bench").classList.toggle("on", b.dataset.tab === "bench");
+  if (b.dataset.tab === "bench") loadBench(); else map?.resize();
+});
+
+/* ---------- form wiring ---------- */
+function seg(id, key, after) {
+  $$(`#${id} button`).forEach(b => b.onclick = () => {
+    $$(`#${id} button`).forEach(x => x.classList.toggle("on", x === b));
+    state[key] = b.dataset.tool; after?.();
+  });
+}
+$$("#modes button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+function setMode(m) {
+  mode = m;
+  $$("#modes button").forEach(x => x.classList.toggle("on", x.dataset.mode === m));
+  $$("[data-panel]").forEach(p => p.hidden = p.dataset.panel !== m);
+  drawSearchArea();
+}
+seg("areaTool", "areaTool", () => $("#areaFilters").hidden = state.areaTool !== "events_near");
+seg("entityTool", "entityTool", () => {
+  $("#beforeFields").hidden = state.entityTool !== "history_before";
+  $("#nearbyFields").hidden = state.entityTool !== "nearby_entities";
+});
+function setTool(id, tool) { $$(`#${id} button`).forEach(b => b.dataset.tool === tool && b.click()); }
+
+const syncOutputs = () => {
+  $("#radiusOut").textContent = fmtM(radiusM());
+  $("#minconfOut").textContent = (+$("#minconf").value / 100).toFixed(2);
+  drawSearchArea();
+};
+["#radius", "#minconf"].forEach(s => $(s).addEventListener("input", syncOutputs));
+["#lat", "#lon"].forEach(s => $(s).addEventListener("change", () => {
+  state.lat = +$("#lat").value; state.lon = +$("#lon").value; drawSearchArea();
+}));
+$$("#quickRanges .chip").forEach(c => c.onclick = () => {
+  $("#end").value = toLocal(nowIso()); $("#start").value = toLocal(shift(nowIso(), -c.dataset.hours));
+});
+function setRadius(m) { $("#radius").value = Math.max(1, Math.min(100, (Math.log10(m) - 1) / 4.3 * 100)); syncOutputs(); }
+function setCenter(lat, lon) {
+  state.lat = lat; state.lon = lon;
+  $("#lat").value = lat.toFixed(5); $("#lon").value = lon.toFixed(5); drawSearchArea();
+}
+
+/* ---------- map ---------- */
+const STYLES = { light: "https://tiles.openfreemap.org/styles/positron",
+                 dark: "https://tiles.openfreemap.org/styles/dark" };
+function initMap() {
+  if (!window.maplibregl) {
+    $("#mapmsg").style.display = "grid";
+    $("#mapmsg").innerHTML = "<div><b>Map library could not load.</b><br>Queries still work; results appear on the right.</div>";
+    $("#mapBadge").hidden = true;
+    return;
+  }
+  map = new maplibregl.Map({ container: "map", style: STYLES[isDark() ? "dark" : "light"],
+                             center: [state.lon, state.lat], zoom: 11, attributionControl: {compact: true} });
+  map.addControl(new maplibregl.NavigationControl({showCompass: false}), "top-right");
+  map.on("style.load", addLayers);
+  map.on("error", e => { if (!mapReady) $("#mapBadge").textContent = "Map tiles unavailable – data layers still shown"; });
+  map.on("click", e => {
+    const hit = map.queryRenderedFeatures(e.point, {layers: ["hits"]})[0];
+    if (hit) return openEvidence(hit.properties.id);
+    if (mode === "area") setCenter(e.lngLat.lat, e.lngLat.lng);
+  });
+  map.on("mouseenter", "hits", () => map.getCanvas().style.cursor = "pointer");
+  map.on("mouseleave", "hits", () => map.getCanvas().style.cursor = "");
+  const pop = new maplibregl.Popup({closeButton: false, closeOnClick: false, offset: 8});
+  map.on("mousemove", "hits", e => {
+    const p = e.features[0].properties;
+    pop.setLngLat(e.lngLat).setHTML(`<b>${esc(p.ev)}</b><br>${esc(p.entity)}<br><span style="color:#888">${esc(p.src)} · ${(+p.conf).toFixed(2)}</span>`).addTo(map);
+  });
+  map.on("mouseleave", "hits", () => pop.remove());
+}
+function setMapStyle() { if (map) { mapReady = false; map.setStyle(STYLES[isDark() ? "dark" : "light"]); } }
+function addLayers() {
+  const add = (id, data) => map.getSource(id) ? map.getSource(id).setData(data) : map.addSource(id, {type: "geojson", data});
+  add("all", fc([])); add("area", fc([])); add("unc", fc([])); add("hitsrc", fc([])); add("fused", fc([]));
+  map.addLayer({id: "all", type: "circle", source: "all", paint: {
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 1.5, 15, 4],
+    "circle-color": ["get", "color"], "circle-opacity": 0.35}});
+  map.addLayer({id: "area-fill", type: "fill", source: "area", paint: {"fill-color": "#2563eb", "fill-opacity": 0.07}});
+  map.addLayer({id: "area-line", type: "line", source: "area", paint: {"line-color": "#2563eb", "line-width": 1.5, "line-dasharray": [2, 2]}});
+  map.addLayer({id: "unc", type: "fill", source: "unc", paint: {"fill-color": ["get", "color"], "fill-opacity": 0.12}});
+  map.addLayer({id: "hits", type: "circle", source: "hitsrc", paint: {
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 16, 8],
+    "circle-color": ["get", "color"], "circle-stroke-color": isDark() ? "#0d1014" : "#fff",
+    "circle-stroke-width": 1.5, "circle-opacity": ["interpolate", ["linear"], ["get", "conf"], 0, 0.35, 1, 1]}});
+  map.addLayer({id: "fused", type: "line", source: "fused", paint: {"line-color": "#16a34a", "line-width": 2.5}});
+  mapReady = true;
+  $("#mapBadge").textContent = overview ? `${overview.count.toLocaleString()} observations${overview.sampled ? " (sampled)" : ""}` : "";
+  drawAll(); drawSearchArea(); if (lastResult) drawResult(lastResult);
+}
+const setData = (id, data) => mapReady && map.getSource(id)?.setData(data);
+function drawAll() { if (overview) setData("all", fc(overview.observations.map(ptFeature))); }
+function drawSearchArea() {
+  setData("area", mode === "area" ? fc([circle(state.lat, state.lon, radiusM())]) : fc([]));
+}
+function drawResult(res) {
+  const obs = res.observations || [];
+  setData("hitsrc", fc(obs.map(ptFeature)));
+  setData("unc", fc(obs.filter(o => o.uncertainty_m > 0).map(o => ({...circle(o.lat, o.lon, o.uncertainty_m, 36), properties: {color: colorOf[o.event_type] || "#888"}}))));
+  setData("fused", res.lat != null ? fc([circle(res.lat, res.lon, Math.max(res.uncertainty_m * 2, 3))]) : fc([]));
+  if (!map) return;
+  const pts = obs.map(o => [o.lon, o.lat]);
+  if (res.lat != null) pts.push([res.lon, res.lat]);
+  if (mode === "area") pts.push(...circle(state.lat, state.lon, radiusM(), 8).geometry.coordinates[0]);
+  if (pts.length) {
+    const b = pts.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(pts[0], pts[0]));
+    map.fitBounds(b, {padding: 60, maxZoom: 17, duration: 600});
+  }
+}
+
+/* ---------- queries ---------- */
+async function run() {
+  let tool, args;
+  if (mode === "area") {
+    tool = state.areaTool;
+    args = {lat: +$("#lat").value, lon: +$("#lon").value, radius_m: radiusM(),
+            start: fromLocal($("#start").value), end: fromLocal($("#end").value), limit: 1000};
+    if (tool === "events_near") {
+      if ($("#etype").value) args.event_type = $("#etype").value;
+      args.min_confidence = +$("#minconf").value / 100;
+    }
+  } else if (mode === "entity") {
+    tool = state.entityTool;
+    args = tool === "history_before"
+      ? {entity_id: $("#entity").value.trim(), event_type: $("#anchor").value.trim() || undefined,
+         lookback_minutes: +$("#lookback").value}
+      : {entity_id: $("#entity").value.trim(), at: fromLocal($("#at").value),
+         radius_m: +$("#nradius").value, window_minutes: +$("#nwindow").value};
+  } else {
+    tool = "fused_location";
+    args = {entity_id: $("#fentity").value.trim(), start: fromLocal($("#fstart").value), end: fromLocal($("#fend").value)};
+  }
+  $("#results").innerHTML = `<div class="empty">Querying…</div>`;
+  const t0 = performance.now();
+  let res;
+  try { res = await api(`/tools/${tool}`, args); }
+  catch (e) { res = {ok: false, error: "Server unreachable. Is `python -m geomemory.demo` running?"}; }
+  res._ms = performance.now() - t0; res._tool = tool;
+  if (tool === "fused_location" && res.ok) {
+    const ids = [...res.support, ...res.outliers];
+    res.observations = (await Promise.all(ids.map(id => api("/tools/evidence", {observation_id: id}))))
+      .filter(r => r.ok).map(r => r.observation)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  }
+  if (tool === "nearby_entities" && res.ok) {
+    const ids = res.entities.flatMap(e => e.evidence);
+    res.observations = (await Promise.all(ids.map(id => api("/tools/evidence", {observation_id: id}))))
+      .filter(r => r.ok).map(r => r.observation);
+  }
+  lastResult = res;
+  renderResult(res);
+  if (res.ok) drawResult(res);
+}
+$("#run").onclick = run;
+
+function renderResult(res) {
+  const el = $("#results");
+  if (!res.ok) { el.innerHTML = `<div class="section"><div class="err">${esc(res.error)}</div></div>`; return; }
+  const obs = res.observations || [];
+  let html = `<div class="section"><h3>Result · ${esc(res._tool.replace(/_/g, " "))}</h3><div class="summary">
+    <div class="kpi"><b>${(res.count ?? obs.length).toLocaleString()}</b><span>observations</span></div>
+    <div class="kpi"><b>${(res.sources || [...new Set(obs.map(o => o.source_id))]).length}</b><span>sources</span></div>
+    <div class="kpi"><b>${res._ms.toFixed(0)}<small style="font-size:12px"> ms</small></b><span>round trip</span></div>
+  </div>${res.truncated ? `<p class="desc" style="margin:10px 0 0">Showing the first ${obs.length}.</p>` : ""}</div>`;
+
+  if (res._tool === "what_changed") {
+    html += `<div class="section"><h3>Changes</h3>`;
+    if (!res.appeared.length && !res.changed.length) html += `<p class="desc">Nothing appeared or changed.</p>`;
+    html += `<ul class="changes">` +
+      res.appeared.map(e => `<li><b>${esc(e)}</b> <span class="desc">appeared</span></li>`).join("") +
+      res.changed.map(c => `<li><b>${esc(c.entity_id)}</b><br>${esc(c.from)}<span class="arrow">→</span>${esc(c.to)}${c.moved_m > 1 ? ` <span class="desc">· moved ${fmtM(Math.round(c.moved_m))}</span>` : ""}</li>`).join("") +
+      `</ul></div>`;
+  }
+  if (res._tool === "history_before" && res.anchor) {
+    html += `<div class="section"><h3>Before ${esc(res.anchor.event_type)} of ${esc(res.entity_id)}</h3>
+      <ul class="changes">${res.timeline.map(t => `<li><span class="mono">T${t.offset_minutes >= 0 ? "+" : ""}${fmtNum(t.offset_minutes, 1)} min</span> · <b>${esc(t.event_type)}</b><br><span class="desc">${esc(t.source_id)} · confidence ${t.confidence.toFixed(2)}</span></li>`).join("")}
+      <li style="border:1px solid var(--danger)"><span class="mono">T 0</span> · <b>${esc(res.anchor.event_type)}</b><br><span class="desc">${esc(res.anchor.source_id)}</span></li></ul></div>`;
+  }
+  if (res._tool === "nearby_entities") {
+    html += `<div class="section"><h3>Near ${esc(res.entity_id)}</h3>${res.entities.length ? `<ul class="changes">${res.entities.map(e => `<li><b>${esc(e.entity_id)}</b> <span class="desc">· ${fmtM(Math.round(e.distance_m))} away</span></li>`).join("")}</ul>` : `<p class="desc">Nothing nearby in that window.</p>`}</div>`;
+  }
+  if (res._tool === "fused_location") {
+    html += `<div class="section"><h3>Fused estimate</h3><dl class="kv">
+      <dt>Location</dt><dd class="mono">${res.lat.toFixed(6)}, ${res.lon.toFixed(6)}</dd>
+      <dt>Uncertainty</dt><dd>± ${fmtNum(res.uncertainty_m, 1)} m</dd>
+      <dt>Confidence</dt><dd>${res.confidence.toFixed(3)}</dd>
+      <dt>Supporting</dt><dd>${res.support.length} observations</dd>
+      <dt>Outliers</dt><dd>${res.outliers.length ? `<span class="bad">${res.outliers.length} flagged</span> (kept, not deleted)` : "none"}</dd></dl></div>`;
+  }
+  if (obs.length) {
+    const out = new Set(res.outliers || []);
+    html += `<div class="section" style="padding-bottom:6px"><h3>Evidence (${obs.length})</h3></div><ul class="timeline">` +
+      obs.map(o => `<li data-id="${esc(o.observation_id)}"><span class="dot" style="background:${colorOf[o.event_type] || "#888"}"></span>
+        <div><div class="t-top"><span class="t-ev">${esc(o.event_type)}${out.has(o.observation_id) ? ' <span class="bad">outlier</span>' : ""}</span><span class="t-time">${fmtTime(o.timestamp)}</span></div>
+        <div>${esc(o.entity_id)}</div>
+        <div class="t-meta"><span>${esc(o.source_id)}</span><span class="conf"><i style="--w:${o.confidence * 100}%"></i>${o.confidence.toFixed(2)}</span>${o.uncertainty_m ? `<span>±${fmtNum(o.uncertainty_m, 0)} m</span>` : ""}</div></div></li>`).join("") + `</ul>`;
+  } else if (res._tool !== "what_changed") {
+    html += `<div class="empty">No observations matched.</div>`;
+  }
+  el.innerHTML = html;
+  $$("#results .timeline li").forEach(li => li.onclick = () => openEvidence(li.dataset.id));
+}
+
+async function openEvidence(id) {
+  const r = await api("/tools/evidence", {observation_id: id});
+  const d = $("#drawer");
+  if (!r.ok) { d.innerHTML = `<div class="section"><div class="err">${esc(r.error)}</div></div>`; d.classList.add("on"); return; }
+  const o = r.observation;
+  d.innerHTML = `<div class="section" style="display:flex;justify-content:space-between;align-items:center">
+      <h3 style="margin:0">Evidence</h3><button class="icon-btn" id="closeDrawer" aria-label="Close">✕</button></div>
+    <div class="section"><div class="t-ev" style="font-size:16px">${esc(o.event_type)}</div><div>${esc(o.entity_id)}</div>
+      <dl class="kv"><dt>Observation</dt><dd class="mono">${esc(o.observation_id)}</dd>
+      <dt>When</dt><dd>${esc(o.timestamp)}</dd><dt>Where</dt><dd class="mono">${o.lat.toFixed(6)}, ${o.lon.toFixed(6)} ±${fmtNum(o.uncertainty_m, 1)} m</dd>
+      <dt>Source</dt><dd>${esc(o.source_id)}</dd><dt>Model</dt><dd>${esc(o.processing_model || "–")}</dd>
+      <dt>Confidence</dt><dd>${o.confidence.toFixed(3)}</dd></dl></div>
+    <div class="section"><h3>Provenance chain</h3>
+      ${r.lineage.length > 1 ? "" : `<p class="desc">No parent observations.</p>`}
+      <ul class="lineage">${r.lineage.map(x => `<li><b>${esc(x.event_type)}</b> <span class="t-time">${fmtTime(x.timestamp)}</span><br><span class="desc">${esc(x.source_id)} · ${x.confidence.toFixed(2)}</span></li>`).join("")}</ul></div>`;
+  d.classList.add("on");
+  $("#closeDrawer").onclick = () => d.classList.remove("on");
+  $$("#results .timeline li").forEach(li => li.classList.toggle("sel", li.dataset.id === id));
+  if (map) map.easeTo({center: [o.lon, o.lat], zoom: Math.max(map.getZoom(), 15)});
+}
+document.addEventListener("keydown", e => e.key === "Escape" && $("#drawer").classList.remove("on"));
+
+/* ---------- scenarios ---------- */
+const SCEN = {
+  m47() { setMode("entity"); setTool("entityTool", "history_before");
+          $("#entity").value = "Machine_47"; $("#anchor").value = "failure"; $("#lookback").value = 60; run(); },
+  flood() { setMode("fuse"); $("#fentity").value = "Flood_Event_1";
+            $("#fstart").value = toLocal(shift(nowIso(), -24 * 7)); $("#fend").value = toLocal(nowIso()); run(); },
+  solar() { setMode("area"); setTool("areaTool", "what_changed"); setCenter(10.9618, 77.0518); setRadius(600);
+            $("#start").value = toLocal(shift(nowIso(), -24 * 45)); $("#end").value = toLocal(nowIso()); run(); },
+  factory() { setMode("area"); setTool("areaTool", "events_near"); setCenter(11.0172, 76.9566); setRadius(300);
+              $("#etype").value = ""; $("#minconf").value = 0; syncOutputs();
+              $("#start").value = toLocal(shift(nowIso(), -24)); $("#end").value = toLocal(nowIso()); run(); },
+};
+$$("#scenarios .chip").forEach(c => c.onclick = () => SCEN[c.dataset.s]());
+
+/* ---------- benchmarks ---------- */
+let benchLoaded = false;
+async function loadBench() {
+  if (benchLoaded) return;
+  let r;
+  try { r = await api("/api/results"); } catch { r = {runs: {}}; }
+  const runs = r.runs || {};
+  const scales = Object.keys(runs).sort((a, b) => ({tiny: 0, S: 1, M: 2}[a] ?? 9) - ({tiny: 0, S: 1, M: 2}[b] ?? 9));
+  if (!scales.length) { $("#benchBody").innerHTML = `<div class="empty">No benchmark results yet.<br>Run <span class="mono">python -m geomemory.bench --scale S</span></div>`; return; }
+  benchLoaded = true;
+  const pick = scales.includes("M") ? "M" : scales[scales.length - 1];
+  $("#benchBody").innerHTML = `<div class="bench-head"><h2>Benchmark results</h2>
+    <div class="seg" id="scaleSeg" style="grid-template-columns:repeat(${scales.length},auto);margin:0">${scales.map(s => `<button data-s="${s}">Scale ${esc(s)}</button>`).join("")}</div>
+    <span class="desc" id="benchMeta" style="margin:0"></span></div><div id="benchCards"></div>`;
+  $$("#scaleSeg button").forEach(b => b.onclick = () => { $$("#scaleSeg button").forEach(x => x.classList.toggle("on", x === b)); renderBench(runs[b.dataset.s]); });
+  $(`#scaleSeg button[data-s="${pick}"]`).click();
+}
+function table(cols, rows) {
+  return `<div class="tablewrap"><table><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${esc(c.h)}</th>`).join("")}</tr></thead><tbody>${
+    rows.map(r => `<tr>${cols.map(c => { const v = c.f(r); return `<td class="${c.n ? "n" : ""}">${typeof v === "boolean" ? (v ? '<span class="good">✓</span>' : '<span class="bad">✗ wrong</span>') : v}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+function bars(items, unit, d = 2, lowerBetter = true) {
+  const max = Math.max(...items.map(i => i.v)) || 1;
+  return `<div class="bars">${items.map(i => `<div class="bar"><span>${esc(i.k)}</span><div class="track"><div class="fill" style="width:${Math.max(1, i.v / max * 100)}%"></div></div><span class="val">${fmtNum(i.v, d)}${unit}</span></div>`).join("")}</div>`;
+}
+function renderBench(run) {
+  const e = run.experiments, out = [];
+  $("#benchMeta").textContent = `seed ${run.seed} · Python ${run.python} · ${run.started}`;
+  const card = (t, q, body) => `<div class="card"><h3>${t}</h3><p class="q">${q}</p>${body}</div>`;
+  if (e.E1) out.push(card("E1 · Dataset scaling", "How does performance change with data volume?", table([
+    {h: "Observations", n: 1, f: r => fmtNum(r.n, 0)}, {h: "Ingest / s", n: 1, f: r => fmtNum(r.ingest_per_s, 0)},
+    {h: "Radius 2 km p50 ms", n: 1, f: r => fmtNum(r.radius_2km.p50_ms, 3)}, {h: "p95 ms", n: 1, f: r => fmtNum(r.radius_2km.p95_ms, 3)},
+    {h: "Place + time p50 ms", n: 1, f: r => fmtNum(r.spatiotemporal.p50_ms, 3)},
+    {h: "Bytes / obs", n: 1, f: r => fmtNum(r.bytes_per_obs, 0)}, {h: "Correct", f: r => r.correct}], e.E1.rows)));
+  if (e.E2) out.push(card(`E2 · Spatial index comparison (${fmtNum(e.E2.n, 0)} obs)`, "Which index is fastest for which query? Lower is better.",
+    `<div class="grid2"><div><h3 style="font-size:13px">Radius 500 m, p50 ms</h3>${bars(e.E2.rows.map(r => ({k: r.index, v: r.radius_500m.p50_ms})), "", 3)}</div>
+     <div><h3 style="font-size:13px">10 nearest, p50 ms</h3>${bars(e.E2.rows.map(r => ({k: r.index, v: r.knn_10.p50_ms})), "", 3)}</div></div><br>` +
+    table([{h: "Index", f: r => esc(r.index)}, {h: "Build s", n: 1, f: r => fmtNum(r.build_s)}, {h: "Index MB", n: 1, f: r => fmtNum(r.index_memory_mb, 1)},
+      {h: "Radius 50 km p50", n: 1, f: r => fmtNum(r.radius_50km.p50_ms, 2)}, {h: "Polygon p50", n: 1, f: r => fmtNum(r.polygon.p50_ms, 2)},
+      {h: "Correct", f: r => r.correct}], e.E2.rows)));
+  if (e.E3) {
+    const real = e.E3.rows[0]?.wall_s != null;
+    out.push(card(real ? `E3 · Distributed scaling, real processes (${e.E3.cpus} CPU cores)` : "E3 · Distributed scaling (modeled)",
+      real ? `${fmtNum(e.E3.queries, 0)} radius queries over ${fmtNum(e.E3.n, 0)} observations. Ideal speedup equals the worker count.` : "Modeled from per-partition timings.",
+      `<div class="grid2"><div><h3 style="font-size:13px">Speedup (×)</h3>${bars(e.E3.rows.map(r => ({k: `${r.workers} worker${r.workers > 1 ? "s" : ""}`, v: r.speedup})), "×")}</div>
+       <div><h3 style="font-size:13px">Efficiency</h3>${bars(e.E3.rows.map(r => ({k: `${r.workers} worker${r.workers > 1 ? "s" : ""}`, v: r.efficiency * 100})), "%", 0)}</div></div><br>` +
+      table(real ? [{h: "Workers", n: 1, f: r => r.workers}, {h: "Wall s", n: 1, f: r => fmtNum(r.wall_s, 3)}, {h: "Queries / s", n: 1, f: r => fmtNum(r.queries_per_s, 0)},
+        {h: "Speedup", n: 1, f: r => fmtNum(r.speedup)}, {h: "Efficiency", n: 1, f: r => fmtNum(r.efficiency)}, {h: "Ingest / s", n: 1, f: r => fmtNum(r.ingest_per_s, 0)}, {h: "Correct", f: r => r.correct}]
+        : [{h: "Workers", n: 1, f: r => r.workers}, {h: "Speedup", n: 1, f: r => fmtNum(r.speedup)}, {h: "Partitions touched", n: 1, f: r => fmtNum(r.partitions_touched)}, {h: "Correct", f: r => r.correct}], e.E3.rows)));
+  }
+  if (e.E4) out.push(card("E4 · Streaming throughput", "Can it keep up while answering queries at the same time?", table([
+    {h: "Offered / s", n: 1, f: r => fmtNum(r.offered_rate, 0)}, {h: "Achieved / s", n: 1, f: r => fmtNum(r.achieved_ingest_per_s, 0)},
+    {h: "Dropped", n: 1, f: r => fmtNum(r.dropped, 0)}, {h: "Max backlog", n: 1, f: r => fmtNum(r.max_backlog, 0)},
+    {h: "E2E p99 ms", n: 1, f: r => fmtNum(r.e2e_p99_ms)}, {h: "Query p50 under load", n: 1, f: r => fmtNum(r.query_under_load.p50_ms, 3)},
+    {h: "Correct", f: r => r.correct}], e.E4.rows)));
+  if (e.E5) out.push(card("E5 · Spatial skew", "Does partitioning stay balanced when data clusters in hotspots? 1.0 = perfectly balanced.",
+    bars(e.E5.rows.map(r => ({k: `${r.distribution} · ${r.partitioner.replace(" (adaptive)", "")}`, v: r.imbalance_max_over_mean})), "×") + "<br>" +
+    table([{h: "Data", f: r => esc(r.distribution)}, {h: "Partitioner", f: r => esc(r.partitioner)},
+      {h: "Imbalance", n: 1, f: r => fmtNum(r.imbalance_max_over_mean)}, {h: "Largest", n: 1, f: r => fmtNum(r.largest_partition, 0)},
+      {h: "Smallest", n: 1, f: r => fmtNum(r.smallest_partition, 0)}, {h: "Hotspot query partitions", n: 1, f: r => fmtNum(r.hotspot_query_partitions, 1)}], e.E5.rows)));
+  if (e.E6) out.push(card("E6 · Agent retrieval", `Does place-and-time retrieval give agents better context than keyword search? (${e.E6.queries} queries)`,
+    table([{h: "Method", f: r => esc(r.method)}, {h: "Precision", n: 1, f: r => fmtNum(r.precision, 4)},
+      {h: "Recall", n: 1, f: r => fmtNum(r.recall, 4)}, {h: "Latency p50 ms", n: 1, f: r => r.latency ? fmtNum(r.latency.p50_ms, 2) : "–"}], e.E6.rows)));
+  $("#benchCards").innerHTML = out.join("");
+}
+
+/* ---------- boot ---------- */
+async function boot() {
+  const end = nowIso();
+  $("#lat").value = state.lat; $("#lon").value = state.lon;
+  syncOutputs();
+  try { overview = await api("/api/overview"); } catch { overview = null; }
+  if (overview?.ok) {
+    let k = 0;
+    overview.event_types.forEach(t => colorOf[t] = SEMANTIC[t] || PALETTE[k++ % PALETTE.length]);
+    $("#stats").innerHTML = `<span><b>${overview.count.toLocaleString()}</b> observations</span><span><b>${overview.entities.toLocaleString()}</b> entities</span><span><b>${overview.sources.length}</b> sources</span>`;
+    $("#legend").innerHTML = overview.event_types.map(t => `<div><span class="dot" style="background:${colorOf[t]}"></span>${esc(t)}</div>`).join("");
+    $("#etype").innerHTML = `<option value="">Any</option>` + overview.event_types.map(t => `<option>${esc(t)}</option>`).join("");
+    $("#entities").innerHTML = [...new Set(overview.observations.map(o => o.entity_id))].sort().map(e => `<option value="${esc(e)}">`).join("");
+  } else {
+    $("#stats").innerHTML = `<span class="bad">API unreachable</span>`;
+  }
+  const e2 = nowIso();
+  $("#end").value = toLocal(e2); $("#start").value = toLocal(shift(e2, -24 * 7));
+  $("#fend").value = toLocal(e2); $("#fstart").value = toLocal(shift(e2, -24 * 7));
+  $("#at").value = toLocal(shift(e2, -0.33));
+  initMap();
+  drawAll();
+}
+boot();
+</script>
+</body>
+</html>

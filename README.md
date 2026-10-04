@@ -3,6 +3,18 @@
 A distributed spatial-temporal memory and provenance engine for AI agents.
 The full specification is in [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
 
+## Try the UI
+
+```bash
+python3 -m geomemory.demo          # open http://127.0.0.1:8765
+```
+
+This loads a demo world around Coimbatore. It has a factory where Machine_47 fails, a solar farm with panels getting worse, delivery trucks, and a flood reported by sources that disagree. Use the map dashboard to:
+- **Explore:** pick a spot on the map and a time window, then ask what happened there or what changed. You can also ask what happened before an event, or combine conflicting sources into one location. Every result shows its source and confidence, and clicking a result opens its full provenance chain.
+- **Benchmarks:** view the E1–E6 results as charts and tables. Switch between scales.
+
+It uses MapLibre and OpenFreeMap tiles (no API key needed), and has light and dark mode. It works on phone-sized screens.
+
 ## Status: Phases 1–5 done
 
 Everything is in plain Python with no outside libraries.
