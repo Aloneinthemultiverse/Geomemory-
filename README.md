@@ -3,6 +3,15 @@
 A distributed spatial-temporal memory and provenance engine for AI agents.
 The full specification is in [docs/SPECIFICATION.md](docs/SPECIFICATION.md). The **evaluation report**, with every experiment on 1M real NYC Uber pickups and answers to the research questions, is in [docs/REPORT.md](docs/REPORT.md).
 
+## Set up on your laptop
+
+```bash
+git clone -b ccr-bef85d66-vw1qxq https://github.com/aloneinthemultiverse/geomemory-.git geomemory && cd geomemory
+scripts/setup.sh                 # macOS/Linux. Windows: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+Step-by-step instructions for Windows, macOS and Linux, with troubleshooting, are in [docs/SETUP.md](docs/SETUP.md). If you only want to run everything in Docker: `docker compose up -d --build`.
+
 ## Try the UI
 
 ```bash
@@ -25,7 +34,7 @@ It uses MapLibre and OpenFreeMap tiles (no API key needed), and has light and da
 
 ## Status: Phases 1–5 done
 
-Everything is in plain Python with no outside libraries.
+The core engine is plain Python. Its only dependency is `tzdata`, the time-zone database. The production backends are optional extras.
 
 **Phase 1: core data layer**
 - `geomemory/model.py`: the `Observation`, `Point` and `Provenance` types, with validation, confidence and spatial uncertainty

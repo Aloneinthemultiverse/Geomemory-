@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geomemory"
+version = "1.0.0"
+description = "Distributed spatial-temporal memory and provenance engine for AI agents"
+readme = "README.md"
+requires-python = ">=3.10"
+# The engine needs only the standard library, plus the IANA time-zone database,
+# which Windows and slim containers lack (used to convert NYC local time to UTC).
+dependencies = ["tzdata>=2024.1"]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110", "uvicorn>=0.29", "httpx>=0.27"]
+postgis = ["psycopg[binary]>=3.1"]
+kafka = ["confluent-kafka>=2.3"]
+spark = ["pyspark==3.5.3", "apache-sedona==1.6.1"]
+all = ["geomemory[api,postgis,kafka,spark]"]
+
+[project.scripts]
+geomemory-demo = "geomemory.demo:main"
+geomemory-api = "geomemory.api:main"
+geomemory-bench = "geomemory.bench:main"
+geomemory-data = "geomemory.datasets:main"
+
+[tool.setuptools.packages.find]
+include = ["geomemory*"]
+
+[tool.setuptools.package-data]
+geomemory = ["ui/*.html"]
