@@ -140,13 +140,18 @@ def main(argv=None) -> None:
     ap.add_argument("--cores", default="*")
     ap.add_argument("--out", default="data/spark_out")
     ap.add_argument("--to-postgis", action="store_true")
+    ap.add_argument("--stats", help="also write the run statistics to this JSON file")
     a = ap.parse_args(argv)
     months = list(UBER_MONTHS) if a.months == "all" else a.months.split(",")
     spark = spark_session(a.cores)
     res = run_uber_pipeline(spark, DATA_DIR, months, Path(a.out), a.cell_deg)
     if a.to_postgis:
         res["stats"]["postgis_rows"] = to_postgis(res)
-    print(json.dumps(res["stats"], indent=2, default=str))
+    text = json.dumps(res["stats"], indent=2, default=str)
+    if a.stats:  # the JVM also writes to stdout, so a file is the reliable record
+        Path(a.stats).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.stats).write_text(text)
+    print(text)
     spark.stop()
 
 

@@ -4,7 +4,7 @@
   "seed": 42,
   "python": "3.11.15",
   "machine": "x86_64",
-  "started": "2026-10-04T11:19:16+00:00",
+  "started": "2026-10-04T13:12:01+00:00",
   "experiments": {
     "E1": {
       "index": "quadtree",
@@ -268,6 +268,235 @@
         }
       ],
       "seconds": 3055.6234228169997
+    },
+    "E3M": {
+      "n": 200000,
+      "query": "radius 5 km",
+      "rows": [
+        {
+          "workers": 1,
+          "partitions": 4,
+          "modeled_time_s": 35.25030624701685,
+          "speedup": 1.0,
+          "efficiency": 1.0,
+          "partitions_touched": 3.65,
+          "messages_per_query": 7.3,
+          "max_node_share": 1.0,
+          "correct": true
+        },
+        {
+          "workers": 2,
+          "partitions": 8,
+          "modeled_time_s": 21.098424338011682,
+          "speedup": 1.6707553930228158,
+          "efficiency": 0.8353776965114079,
+          "partitions_touched": 6.63,
+          "messages_per_query": 13.26,
+          "max_node_share": 0.5,
+          "correct": true
+        },
+        {
+          "workers": 4,
+          "partitions": 16,
+          "modeled_time_s": 10.78873964802915,
+          "speedup": 3.267323839208249,
+          "efficiency": 0.8168309598020622,
+          "partitions_touched": 13.11,
+          "messages_per_query": 26.22,
+          "max_node_share": 0.2553325,
+          "correct": true
+        },
+        {
+          "workers": 8,
+          "partitions": 32,
+          "modeled_time_s": 6.016883462039914,
+          "speedup": 5.858565562954394,
+          "efficiency": 0.7323206953692992,
+          "partitions_touched": 24.3,
+          "messages_per_query": 48.6,
+          "max_node_share": 0.1299825,
+          "correct": true
+        }
+      ],
+      "seconds": 178.640030732
+    },
+    "E4": {
+      "rows": [
+        {
+          "offered_rate": 100,
+          "achieved_ingest_per_s": 100.08959251631332,
+          "produce_s": 4.990193432000524,
+          "drain_s": 4.995524384001328,
+          "stored": 500,
+          "dropped": 0,
+          "max_backlog": 1,
+          "e2e_p50_ms": 0.4090059992449824,
+          "e2e_p99_ms": 0.8155069990607444,
+          "query_under_load": {
+            "p50_ms": 0.10287199984304607,
+            "p95_ms": 0.2222479997726623,
+            "mean_ms": 0.12167671339204726
+          },
+          "correct": true
+        },
+        {
+          "offered_rate": 1000,
+          "achieved_ingest_per_s": 999.568412148748,
+          "produce_s": 4.999128927000129,
+          "drain_s": 5.0021588709987554,
+          "stored": 5000,
+          "dropped": 0,
+          "max_backlog": 24,
+          "e2e_p50_ms": 0.36716200156661216,
+          "e2e_p99_ms": 1.2986179990548408,
+          "query_under_load": {
+            "p50_ms": 0.2855549992091255,
+            "p95_ms": 0.9020089983096113,
+            "mean_ms": 0.3585235517714212
+          },
+          "correct": true
+        },
+        {
+          "offered_rate": 10000,
+          "achieved_ingest_per_s": 9288.866156044496,
+          "produce_s": 5.333352969999396,
+          "drain_s": 5.382788292999976,
+          "stored": 50000,
+          "dropped": 0,
+          "max_backlog": 1029,
+          "e2e_p50_ms": 0.7015970004431438,
+          "e2e_p99_ms": 41.99672399954579,
+          "query_under_load": {
+            "p50_ms": 1.0296499985997798,
+            "p95_ms": 7.756117000099039,
+            "mean_ms": 2.2060031830320797
+          },
+          "correct": true
+        }
+      ],
+      "seconds": 15.509390840999913
+    },
+    "E5": {
+      "partitions": 16,
+      "rows": [
+        {
+          "distribution": "real",
+          "partitioner": "Grid 0.283\u00b0",
+          "imbalance_max_over_mean": 14.68272,
+          "largest_partition": 183534,
+          "smallest_partition": 0,
+          "empty_partitions": 9,
+          "hotspot_query_partitions": 1.4,
+          "hotspot_query_max_partition_rows": 183534.0
+        },
+        {
+          "distribution": "real",
+          "partitioner": "KD (adaptive)",
+          "imbalance_max_over_mean": 1.12304,
+          "largest_partition": 14038,
+          "smallest_partition": 10938,
+          "empty_partitions": 0,
+          "hotspot_query_partitions": 6.0,
+          "hotspot_query_max_partition_rows": 13728.8
+        }
+      ],
+      "seconds": 4.482166972000414
+    },
+    "E6": {
+      "n": 100000,
+      "queries": 100,
+      "facet": "source_id",
+      "rows": [
+        {
+          "method": "GeoMemory spatial-temporal",
+          "precision": 1.0,
+          "recall": 1.0,
+          "latency": {
+            "p50_ms": 4.556429999865941,
+            "p95_ms": 48.8920980005787,
+            "mean_ms": 10.42960918011886
+          }
+        },
+        {
+          "method": "Keyword baseline",
+          "precision": 0.0028599999999999997,
+          "recall": 0.2604814004376368,
+          "latency": null
+        }
+      ],
+      "seconds": 10.702270518999285
+    },
+    "E7": {
+      "n": 1000000,
+      "radii_m": [
+        200,
+        5000
+      ],
+      "rows": [
+        {
+          "backend": "GeoMemory in-memory (QuadTree)",
+          "ingest_per_s": 11921.38361347155,
+          "storage_mb": null,
+          "radius_small": {
+            "p50_ms": 12.80497400148306,
+            "p95_ms": 41.29005700087873,
+            "mean_ms": 14.708590100053698
+          },
+          "radius_large": {
+            "p50_ms": 2631.2061629996606,
+            "p95_ms": 2897.870527000123,
+            "mean_ms": 2254.015390099903
+          },
+          "knn_10": {
+            "p50_ms": 4.942282999763847,
+            "p95_ms": 45.17250699973374,
+            "mean_ms": 9.51854473012645
+          },
+          "place_time": {
+            "p50_ms": 78.2411090003734,
+            "p95_ms": 127.48949399974663,
+            "mean_ms": 77.4536372199691
+          },
+          "polygon": {
+            "p50_ms": 2477.714268999989,
+            "p95_ms": 2570.623797000735,
+            "mean_ms": 2487.252722333627
+          },
+          "correct": true
+        },
+        {
+          "backend": "PostGIS 3.4 (GiST, geography)",
+          "ingest_per_s": 31030.224054146976,
+          "storage_mb": 453.1015625,
+          "radius_small": {
+            "p50_ms": 60.31810599961318,
+            "p95_ms": 201.40116599941393,
+            "mean_ms": 89.20137492999856
+          },
+          "radius_large": {
+            "p50_ms": 19022.828549001133,
+            "p95_ms": 22197.374209001282,
+            "mean_ms": 16027.559672600091
+          },
+          "knn_10": {
+            "p50_ms": 4.554545999781112,
+            "p95_ms": 7.983677998709027,
+            "mean_ms": 4.829365730038262
+          },
+          "place_time": {
+            "p50_ms": 444.72747600048024,
+            "p95_ms": 2204.067462000239,
+            "mean_ms": 566.3977982000688
+          },
+          "polygon": {
+            "p50_ms": 19825.823684999705,
+            "p95_ms": 20065.509493999343,
+            "mean_ms": 19384.848082666093
+          },
+          "correct": true
+        }
+      ],
+      "seconds": 688.3809742280009
     }
   }
 }
