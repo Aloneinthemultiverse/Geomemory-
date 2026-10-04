@@ -57,6 +57,18 @@ class BenchTests(unittest.TestCase):
         self.assertEqual([(o.location, o.timestamp) for o in a],
                          [(o.location, o.timestamp) for o in b])
 
+    def test_keep_adds_instead_of_overwriting(self):
+        d = tempfile.mkdtemp()
+        bench.run("tiny", ["E5"], seed=1, out=d, log=lambda *_: None)
+        bench.run("tiny", ["E6"], seed=1, out=d, log=lambda *_: None, keep=True)
+        got = json.loads((Path(d) / "results.json").read_text())["experiments"]
+        self.assertEqual(sorted(got), ["E5", "E6"])
+        bench.run("tiny", ["E6"], seed=1, out=d, log=lambda *_: None)  # no keep: replace
+        got = json.loads((Path(d) / "results.json").read_text())["experiments"]
+        self.assertEqual(sorted(got), ["E6"])
+        with self.assertRaises(ValueError):  # refuse to mix different runs
+            bench.run("tiny", ["E6"], seed=2, out=d, log=lambda *_: None, keep=True)
+
     def test_cli_rejects_unknown_experiment(self):
         with self.assertRaises(SystemExit):
             bench.main(["--experiments", "E9", "--out", self.dir])

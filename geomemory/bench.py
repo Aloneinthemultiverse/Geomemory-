@@ -655,6 +655,15 @@ def run(scale: str = "S", experiments=None, seed: int = 42, out: str | None = No
     res = {"scale": scale, "dataset": dataset, "seed": seed, "python": platform.python_version(),
            "machine": platform.machine(), "started": datetime.now(timezone.utc).isoformat(
                timespec="seconds"), "experiments": {}}
+    prev = Path(out) / "results.json" if out else None
+    if keep and prev and prev.exists():
+        old = json.loads(prev.read_text())
+        if (old.get("scale"), old.get("dataset", "synthetic"), old.get("seed")) == \
+                (scale, dataset, seed):
+            res["experiments"] = old["experiments"]  # add to, don't discard, earlier work
+            log(f"keeping {sorted(old['experiments'])} from {prev}")
+        else:
+            raise ValueError(f"--keep: {prev} is for a different scale/dataset/seed")
     for name in names:
         log(f"running {name} ...")
         dt, r = timed(lambda: EXPERIMENTS[name](sc, seed))

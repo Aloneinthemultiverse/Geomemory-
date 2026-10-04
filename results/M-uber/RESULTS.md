@@ -21,3 +21,14 @@ Latencies are milliseconds. "Correct" means the answer equals a brute-force scan
 | Grid 1° | 65.33 | 8.12 | 1,351.72 | 1,820.16 | 1,355.89 | 1,730.96 | yes |
 | Geohash p6 | 70.69 | 8.71 | 62.85 | 2,182.21 | 67.82 | 2,265.03 | yes |
 | QuadTree | 81.18 | 105.37 | 11.72 | 2,514.55 | 6.01 | 2,574.80 | yes |
+
+## E3: distributed scaling, real processes (200,000 observations, batch of 5,000 radius queries, 4 CPU cores)
+
+Each worker is a separate OS process. Wall-clock time, best of 3. Rows with more workers than cores are oversubscribed and cannot speed up further.
+
+| Workers | Wall s | Queries/s | Speedup | Efficiency | Ingest/s | Partition imbalance | Correct |
+|---|---|---|---|---|---|---|---|
+| 1 | 494.08 | 10.12 | 1.00 | 1.00 | 17,290.94 | 1.03 | yes |
+| 2 | 250.84 | 19.93 | 1.97 | 0.98 | 25,517.46 | 1.08 | yes |
+| 4 | 123.31 | 40.55 | 4.01 | 1.00 | 37,316.39 | 1.12 | yes |
+| 8 | 107.80 | 46.38 | 4.58 | 0.57 | 34,183.85 | 1.30 | yes |
