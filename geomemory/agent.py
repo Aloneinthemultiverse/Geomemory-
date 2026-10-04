@@ -258,22 +258,32 @@ class AgentInterface:
         return {"ok": True, "entity_id": entity,
                 "entities": sorted(found.values(), key=lambda x: (x["distance_m"], x["entity_id"]))}
 
-    def overview(self, limit: int = 5000) -> dict:
-        """Dataset summary plus a sample for the UI's initial map."""
+    def overview(self, limit: int = 3000) -> dict:
+        """Dataset summary plus a compact map sample for the UI.
+
+        Points are [lat, lon, event_type_index] triples so the first page load
+        stays small (tens of KB, not megabytes)."""
         far_past = datetime(1, 1, 2, tzinfo=timezone.utc)
         far_future = datetime(9999, 12, 30, tzinfo=timezone.utc)
         obs = self.mem.between(far_past, far_future)
         if not obs:
-            return {"ok": True, "dataset": self.dataset, "count": 0, "observations": [],
-                    "event_types": [], "sources": [], "entities": 0}
+            return {"ok": True, "dataset": self.dataset, "count": 0, "points": [],
+                    "event_types": [], "sources": [], "entities": 0, "entity_names": []}
+        types = sorted({o.event_type for o in obs})
+        ti = {t: i for i, t in enumerate(types)}
         step = max(1, len(obs) // limit)
+        names = sorted({o.entity_id for o in obs})
+        lats = sorted(o.location.lat for o in obs[::step])
+        lons = sorted(o.location.lon for o in obs[::step])
         return {"ok": True, "dataset": self.dataset, "count": len(obs),
-                "entities": len({o.entity_id for o in obs}),
+                "entities": len(names), "entity_names": names[:500],
                 "sources": sorted({o.source_id for o in obs}),
-                "event_types": sorted({o.event_type for o in obs}),
+                "event_types": types,
                 "start": obs[0].timestamp.isoformat(), "end": obs[-1].timestamp.isoformat(),
+                "center": [lats[len(lats) // 2], lons[len(lons) // 2]],
                 "sampled": step > 1,
-                "observations": [_obs_json(o) for o in obs[::step][:limit]]}
+                "points": [[round(o.location.lat, 5), round(o.location.lon, 5), ti[o.event_type]]
+                           for o in obs[::step][:limit]]}
 
     def evidence(self, args: dict) -> dict:
         oid = _str(args, "observation_id")

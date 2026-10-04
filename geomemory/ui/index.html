@@ -1,793 +1,734 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GeoMemory</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
-:root {
-  --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f1f3f6; --line: #e3e6eb;
-  --text: #15181d; --muted: #646b76; --faint: #9aa1ab;
-  --accent: #2563eb; --accent-soft: #e6eefe; --danger: #dc2626; --ok: #16a34a; --warn: #d97706;
-  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 4px 16px rgba(16,24,40,.06);
-  --radius: 10px;
-  --mono: "JetBrains Mono", ui-monospace, monospace;
+:root, :root[data-theme="dark"] {
+  --bg: #0b0f17; --glass: rgba(17, 23, 34, .86); --card: #161d2b; --card-2: #1d2636; --line: #263044;
+  --text: #eef2f8; --muted: #9aa6ba; --faint: #63708a;
+  --accent: #6d8bff; --accent-2: #9b7bff; --accent-soft: rgba(109,139,255,.14);
+  --good: #34d399; --bad: #f87171; --warn: #fbbf24;
+  --shadow: 0 10px 40px rgba(0,0,0,.45);
+  --grad: linear-gradient(135deg, #6d8bff 0%, #9b7bff 55%, #e879f9 100%);
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0d1014; --panel: #151a20; --panel-2: #1c222a; --line: #262e38;
-    --text: #e8ebef; --muted: #9aa3ae; --faint: #66707c;
-    --accent: #5b8cff; --accent-soft: #1b2740; --shadow: 0 1px 2px rgba(0,0,0,.4);
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0d1014; --panel: #151a20; --panel-2: #1c222a; --line: #262e38;
-  --text: #e8ebef; --muted: #9aa3ae; --faint: #66707c;
-  --accent: #5b8cff; --accent-soft: #1b2740; --shadow: 0 1px 2px rgba(0,0,0,.4);
+:root[data-theme="light"] {
+  --bg: #eef1f6; --glass: rgba(255,255,255,.9); --card: #ffffff; --card-2: #f3f5f9; --line: #e2e6ee;
+  --text: #121826; --muted: #5b6577; --faint: #98a2b3;
+  --accent: #4f6ef7; --accent-2: #7c5cf5; --accent-soft: rgba(79,110,247,.1);
+  --good: #059669; --bad: #dc2626; --warn: #d97706;
+  --shadow: 0 10px 40px rgba(20,30,60,.16);
+  --grad: linear-gradient(135deg, #4f6ef7 0%, #7c5cf5 55%, #c026d3 100%);
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; }
-body { background: var(--bg); color: var(--text); font: 14px/1.45 Inter, system-ui, sans-serif;
-       display: flex; flex-direction: column; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--text); font: 14px/1.5 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 button, input, select { font: inherit; color: inherit; }
+a { color: var(--accent); }
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; }
+.muted { color: var(--muted); }
 
-/* header */
-header { display: flex; align-items: center; gap: 20px; padding: 10px 16px;
-         background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
-.brand svg { color: var(--accent); }
-.brand small { font-weight: 500; color: var(--muted); font-size: 12px; }
-nav { display: flex; gap: 4px; background: var(--panel-2); padding: 3px; border-radius: 8px; }
-nav button { border: 0; background: none; padding: 5px 12px; border-radius: 6px; cursor: pointer;
-             color: var(--muted); font-weight: 500; }
-nav button.on { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
-.stats { display: flex; gap: 16px; margin-left: auto; color: var(--muted); font-size: 12.5px; }
-.stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
-.icon-btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
-            width: 32px; height: 32px; cursor: pointer; display: grid; place-items: center; }
+#map { position: fixed; inset: 0; }
+.maplibregl-ctrl-attrib { font-size: 10px; }
 
-/* explore layout */
-main { flex: 1; min-height: 0; display: none; }
-main.on { display: grid; }
-#explore { grid-template-columns: 340px 1fr 380px; }
-aside { background: var(--panel); border-right: 1px solid var(--line); overflow: auto; }
-aside.right { border-right: 0; border-left: 1px solid var(--line); }
-.section { padding: 16px; border-bottom: 1px solid var(--line); }
-.section h3 { margin: 0 0 12px; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase;
-              color: var(--muted); font-weight: 600; }
-.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--panel-2);
-       padding: 3px; border-radius: 8px; margin-bottom: 14px; }
-.seg button { border: 0; background: none; padding: 6px 4px; border-radius: 6px; cursor: pointer;
-              font-size: 12.5px; color: var(--muted); font-weight: 500; }
-.seg button.on { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
-.desc { color: var(--muted); font-size: 12.5px; margin: -4px 0 14px; }
-label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; font-weight: 500; }
+/* glass surfaces */
+.glass { background: var(--glass); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
+         border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+
+/* top bar */
+.topbar { position: fixed; top: 14px; left: 14px; right: 14px; z-index: 5; display: flex; align-items: center; gap: 14px;
+          padding: 8px 10px 8px 16px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; letter-spacing: -.01em; white-space: nowrap; }
+.logo { width: 30px; height: 30px; border-radius: 9px; background: var(--grad); display: grid; place-items: center; color: #fff; }
+nav { display: flex; gap: 2px; background: var(--card-2); padding: 3px; border-radius: 10px; }
+nav button { border: 0; background: none; padding: 6px 14px; border-radius: 8px; cursor: pointer; color: var(--muted); font-weight: 600; font-size: 13px; }
+nav button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.stats { display: flex; gap: 8px; margin-left: auto; }
+.pill { background: var(--card-2); border-radius: 99px; padding: 5px 11px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.pill b { color: var(--text); font-weight: 700; }
+.icon-btn { border: 1px solid var(--line); background: var(--card); border-radius: 10px; width: 34px; height: 34px; cursor: pointer;
+            display: grid; place-items: center; flex: none; }
+
+/* side panel */
+#panel { position: fixed; z-index: 4; top: 76px; left: 14px; bottom: 14px; width: 410px; display: flex; flex-direction: column; overflow: hidden; }
+.view { display: none; flex-direction: column; overflow-y: auto; height: 100%; }
+.view.on { display: flex; }
+.pad { padding: 20px 20px 0; }
+.hero h1 { font-size: 26px; line-height: 1.15; letter-spacing: -.02em; margin: 6px 0 8px; font-weight: 800; }
+.hero h1 span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero p { color: var(--muted); margin: 0 0 16px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--accent);
+         background: var(--accent-soft); padding: 4px 10px; border-radius: 99px; }
+.badge i { width: 6px; height: 6px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px rgba(52,211,153,.2); }
+.section-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 18px 0 10px; }
+.cards { display: grid; gap: 10px; }
+.qcard { display: grid; grid-template-columns: 44px 1fr 18px; gap: 12px; align-items: center; text-align: left; width: 100%;
+         background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; cursor: pointer; transition: .15s; }
+.qcard:hover { border-color: var(--accent); transform: translateY(-1px); background: var(--card-2); }
+.qcard .ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; background: var(--card-2); }
+.qcard b { display: block; font-size: 14px; margin-bottom: 2px; }
+.qcard small { color: var(--muted); font-size: 12.5px; line-height: 1.35; display: block; }
+.qcard .go { color: var(--faint); }
+.how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.how div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; font-size: 12px; color: var(--muted); }
+.how b { display: block; color: var(--text); font-size: 12.5px; margin-bottom: 2px; }
+.ghost { width: 100%; margin: 14px 0 20px; padding: 11px; border-radius: 12px; border: 1px dashed var(--line); background: none;
+         color: var(--muted); cursor: pointer; font-weight: 600; }
+.ghost:hover { color: var(--text); border-color: var(--accent); }
+
+.back { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; font-weight: 600; font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+.back:hover { color: var(--text); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; background: var(--card-2); padding: 3px; border-radius: 10px; margin: 14px 0 6px; }
+.seg button { border: 0; background: none; padding: 7px 4px; border-radius: 8px; cursor: pointer; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.seg button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 5px; font-weight: 600; }
 input[type=text], input[type=number], input[type=datetime-local], select {
-  width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px;
-  background: var(--panel); outline: none; }
+  width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); outline: none; color-scheme: dark; }
+:root[data-theme="light"] input, :root[data-theme="light"] select { color-scheme: light; }
 input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.range-row { display: flex; align-items: center; gap: 10px; }
-.range-row input { flex: 1; accent-color: var(--accent); }
-.range-row output { font-family: var(--mono); font-size: 12px; min-width: 64px; text-align: right; }
-.hint { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted);
-        background: var(--accent-soft); border-radius: 7px; padding: 7px 9px; margin-top: 10px; }
-.primary { width: 100%; margin-top: 16px; padding: 9px; border: 0; border-radius: 8px;
-           background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
-.primary:hover { filter: brightness(1.07); }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { font-size: 12px; padding: 3px 8px; border-radius: 99px; background: var(--panel-2);
-        border: 1px solid var(--line); cursor: pointer; }
-.legend { display: grid; gap: 6px; font-size: 12.5px; }
-.legend div { display: flex; align-items: center; gap: 8px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.range { display: flex; align-items: center; gap: 10px; }
+.range input { flex: 1; accent-color: var(--accent); }
+.range output { font-family: "JetBrains Mono", monospace; font-size: 12px; min-width: 62px; text-align: right; }
+.tip { font-size: 12px; color: var(--muted); background: var(--accent-soft); border-radius: 10px; padding: 8px 10px; margin-top: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--card-2); border: 1px solid var(--line); cursor: pointer; }
+.chip:hover { border-color: var(--accent); }
+.primary { width: 100%; margin: 18px 0 20px; padding: 12px; border: 0; border-radius: 12px; background: var(--grad); color: #fff;
+           font-weight: 700; cursor: pointer; box-shadow: 0 6px 20px rgba(109,139,255,.35); }
+.primary:hover { filter: brightness(1.08); }
+
+/* answer */
+.q { font-size: 13px; color: var(--muted); margin: 14px 0 4px; }
+.headline { font-size: 18px; line-height: 1.4; font-weight: 600; margin: 0 0 14px; letter-spacing: -.01em; }
+.headline em { font-style: normal; color: var(--accent); }
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fact { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.fact b { display: block; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fact span { font-size: 11.5px; color: var(--muted); }
+.steps { list-style: none; margin: 0; padding: 0; position: relative; }
+.steps li { position: relative; padding: 0 0 14px 26px; }
+.steps li::before { content: ""; position: absolute; left: 6px; top: 14px; bottom: -2px; width: 2px; background: var(--line); }
+.steps li:last-child::before { display: none; }
+.steps li i { position: absolute; left: 0; top: 4px; width: 14px; height: 14px; border-radius: 50%; border: 3px solid var(--card); box-shadow: 0 0 0 2px var(--c, var(--accent)); background: var(--c, var(--accent)); }
+.steps .when { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--faint); }
+.steps b { display: block; }
+.steps small { color: var(--muted); }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.ev { list-style: none; margin: 0 0 20px; padding: 0; display: grid; gap: 8px; }
+.ev li { display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center; background: var(--card); border: 1px solid var(--line);
+         border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+.ev li:hover, .ev li.sel { border-color: var(--accent); }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.ev b { font-size: 13.5px; }
+.ev small { display: block; color: var(--muted); font-size: 12px; }
+.conf { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.bar { width: 40px; height: 5px; border-radius: 3px; background: var(--card-2); overflow: hidden; }
+.bar > div { height: 100%; background: var(--good); }
+.tag { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 99px; text-transform: uppercase; letter-spacing: .04em; }
+.tag.bad { background: rgba(248,113,113,.15); color: var(--bad); }
+.tag.good { background: rgba(52,211,153,.15); color: var(--good); }
+.err { color: var(--bad); background: rgba(248,113,113,.12); border-radius: 12px; padding: 12px; margin: 14px 0; }
+.loading { display: flex; align-items: center; gap: 10px; color: var(--muted); padding: 30px 0; }
+.spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* map */
-#mapwrap { position: relative; min-width: 0; }
-#map { position: absolute; inset: 0; }
-#mapmsg { position: absolute; inset: 0; display: none; place-items: center; text-align: center;
-          color: var(--muted); padding: 24px; }
-.map-badge { position: absolute; top: 12px; left: 12px; background: var(--panel);
-             border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
-             font-size: 12px; box-shadow: var(--shadow); color: var(--muted); }
-
-/* results */
-.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.kpi { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
-.kpi b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
-.kpi span { font-size: 11.5px; color: var(--muted); }
-.empty { color: var(--muted); text-align: center; padding: 40px 16px; font-size: 13px; }
-.empty svg { color: var(--faint); margin-bottom: 8px; }
-.err { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent);
-       padding: 8px 10px; border-radius: 7px; font-size: 13px; }
-.timeline { list-style: none; margin: 0; padding: 0; }
-.timeline li { display: grid; grid-template-columns: 14px 1fr; gap: 10px; padding: 9px 16px;
-               cursor: pointer; border-bottom: 1px solid var(--line); }
-.timeline li:hover, .timeline li.sel { background: var(--panel-2); }
-.timeline .dot { margin-top: 5px; }
-.t-top { display: flex; justify-content: space-between; gap: 8px; }
-.t-ev { font-weight: 600; }
-.t-time { color: var(--muted); font-size: 12px; font-family: var(--mono); white-space: nowrap; }
-.t-meta { font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
-.conf { display: inline-flex; align-items: center; gap: 5px; }
-.conf i { width: 36px; height: 4px; background: var(--line); border-radius: 2px; position: relative; }
-.conf i::after { content: ""; position: absolute; inset: 0; width: var(--w); background: var(--ok);
-                 border-radius: 2px; }
-.changes { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
-.changes li { background: var(--panel-2); border-radius: 7px; padding: 7px 9px; font-size: 12.5px; }
-.arrow { color: var(--faint); margin: 0 4px; }
-.mono { font-family: var(--mono); font-size: 12px; }
+/* legend */
+#legend { position: fixed; z-index: 3; right: 14px; bottom: 30px; padding: 10px 12px; font-size: 12px; display: grid; gap: 5px; max-height: 40vh; overflow: auto; }
+#legend div { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 
 /* evidence drawer */
-#drawer { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 100%); background: var(--panel);
-          border-left: 1px solid var(--line); box-shadow: -8px 0 30px rgba(0,0,0,.12);
-          transform: translateX(100%); transition: transform .2s ease; z-index: 10; overflow: auto; }
+#drawer { position: fixed; z-index: 6; top: 76px; right: 14px; bottom: 14px; width: 380px; overflow-y: auto; transform: translateX(calc(100% + 30px)); transition: transform .25s ease; }
 #drawer.on { transform: none; }
-.lineage { list-style: none; margin: 0; padding: 0; position: relative; }
-.lineage li { position: relative; padding: 0 0 16px 22px; }
-.lineage li::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: -6px; width: 2px;
-                      background: var(--line); }
-.lineage li:last-child::before { display: none; }
-.lineage li::after { content: ""; position: absolute; left: 0; top: 3px; width: 12px; height: 12px;
-                     border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); }
-.kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; font-size: 12.5px; margin-top: 6px; }
+.kv { display: grid; grid-template-columns: 100px 1fr; gap: 6px 10px; font-size: 13px; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-all; }
 
-/* benchmarks */
-#bench { display: none; overflow: auto; padding: 24px; }
-#bench.on { display: block; }
-.bench-wrap { max-width: 1100px; margin: 0 auto; }
-.bench-head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
-.bench-head h2 { margin: 0; font-size: 20px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-        padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
-.card h3 { margin: 0 0 4px; font-size: 15px; }
-.card p.q { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px;
-     border-bottom: 1px solid var(--line); white-space: nowrap; }
-td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
-td.n { text-align: right; } th.n { text-align: right; }
-.tablewrap { overflow-x: auto; }
-.bad { color: var(--danger); font-weight: 600; }
-.good { color: var(--ok); }
-.bars { display: grid; gap: 8px; }
-.bar { display: grid; grid-template-columns: 130px 1fr 72px; gap: 10px; align-items: center; font-size: 12.5px; }
-.bar .track { height: 14px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
-.bar .fill { height: 100%; background: var(--accent); border-radius: 4px; }
-.bar .val { text-align: right; font-family: var(--mono); font-size: 12px; }
+/* boot overlay */
+#boot { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--bg); transition: opacity .4s; }
+#boot.hide { opacity: 0; pointer-events: none; }
+#boot .inner { text-align: center; color: var(--muted); }
+#boot .logo { width: 56px; height: 56px; border-radius: 16px; margin: 0 auto 14px; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(.92); opacity: .7; } }
 
-@media (max-width: 1100px) {
-  #explore { grid-template-columns: 300px 1fr; }
-  #explore aside.right { grid-column: 1 / -1; max-height: 45vh; border-left: 0; border-top: 1px solid var(--line); }
-}
-@media (max-width: 720px) {
-  #explore { grid-template-columns: 1fr; grid-template-rows: auto 50vh auto; }
-  aside { border-right: 0; }
+/* benchmarks page */
+#bench { position: fixed; inset: 0; z-index: 4; overflow-y: auto; background: var(--bg); display: none; padding: 86px 20px 30px; }
+#bench.on { display: block; }
+.wrap { max-width: 1080px; margin: 0 auto; }
+.bh h2 { font-size: 28px; margin: 0 0 6px; letter-spacing: -.02em; font-weight: 800; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0 20px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.kpi b { display: block; font-size: 30px; font-weight: 800; letter-spacing: -.02em; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.kpi span { color: var(--muted); font-size: 13px; }
+.kpi small { display: block; color: var(--faint); font-size: 11.5px; margin-top: 4px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 14px; }
+.card h3 { margin: 0 0 2px; font-size: 16px; }
+.card p.qq { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+.takeaway { background: var(--accent-soft); color: var(--text); border-radius: 10px; padding: 9px 12px; margin: 0 0 14px; font-size: 13px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+th { text-align: left; color: var(--muted); font-weight: 600; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line); }
+.n { text-align: right; }
+.tw { overflow-x: auto; }
+.bars { display: grid; gap: 8px; }
+.brow { display: grid; grid-template-columns: 140px 1fr 70px; gap: 10px; align-items: center; font-size: 12.5px; }
+.track { height: 12px; background: var(--card-2); border-radius: 6px; overflow: hidden; }
+.fill { height: 100%; background: var(--grad); border-radius: 6px; }
+.val { text-align: right; font-family: "JetBrains Mono", monospace; font-size: 12px; }
+h4 { margin: 0 0 10px; font-size: 13px; }
+
+@media (max-width: 860px) {
   .stats { display: none; }
-  .grid2 { grid-template-columns: 1fr; }
-  #bench { padding: 16px; }
+  #panel { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; height: 58vh; }
+  #drawer { left: 8px; right: 8px; width: auto; top: auto; bottom: 8px; height: 70vh; transform: translateY(110%); }
+  .topbar { left: 8px; right: 8px; top: 8px; }
+  #legend { display: none; }
+  .kpis, .grid2 { grid-template-columns: 1fr; }
+  .brow { grid-template-columns: 100px 1fr 60px; }
 }
+@media (max-width: 480px) { .brand span.name { display: none; } nav button { padding: 6px 10px; } }
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><path d="M4 21h16" opacity=".5"/></svg>
-    GeoMemory <small>spatial-temporal memory</small>
-  </div>
-  <nav>
-    <button class="on" data-tab="explore">Explore</button>
-    <button data-tab="bench">Benchmarks</button>
-  </nav>
+<div id="boot"><div class="inner"><div class="logo"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/></svg></div>Loading spatial memory…</div></div>
+
+<div id="map"></div>
+
+<header class="topbar glass">
+  <div class="brand"><div class="logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/></svg></div><span class="name">GeoMemory</span></div>
+  <nav><button class="on" data-tab="explore">Explore</button><button data-tab="bench">Benchmarks</button></nav>
   <div class="stats" id="stats"></div>
-  <button class="icon-btn" id="theme" title="Toggle theme" aria-label="Toggle theme">
+  <button class="icon-btn" id="theme" title="Light / dark" aria-label="Toggle light or dark theme">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
   </button>
 </header>
 
-<main id="explore" class="on">
-  <aside>
-    <div class="section">
-      <h3>Ask GeoMemory</h3>
-      <div class="seg" id="modes">
-        <button class="on" data-mode="area">Area</button>
-        <button data-mode="entity">Entity</button>
-        <button data-mode="fuse">Fuse</button>
-      </div>
+<aside id="panel" class="glass">
+  <!-- HOME -->
+  <section class="view on" id="v-home"><div class="pad">
+    <div class="hero">
+      <span class="badge" id="dsBadge"><i></i>Live demo</span>
+      <h1>Ask the map <span>what happened.</span></h1>
+      <p>GeoMemory remembers events in the physical world: <b>where</b> and <b>when</b> they happened, <b>who reported them</b> and <b>how sure they were</b>. Pick a question to see an answer with the evidence behind it.</p>
+    </div>
+    <div class="section-title">Try a question</div>
+    <div class="cards" id="scenarios"></div>
+    <div class="section-title">How it works</div>
+    <div class="how">
+      <div><b>1 · Remember</b>Every report is stored with its place, time and source.</div>
+      <div><b>2 · Ask</b>Search by place, time, thing or source, in milliseconds.</div>
+      <div><b>3 · Trust</b>Every answer shows its evidence and confidence.</div>
+    </div>
+    <button class="ghost" id="toBuilder">＋ Build your own question</button>
+  </div></section>
 
-      <div data-panel="area">
-        <p class="desc">What happened in a place during a time window?</p>
-        <div class="seg" id="areaTool" style="grid-template-columns:1fr 1fr">
-          <button class="on" data-tool="events_near">Events</button>
-          <button data-tool="what_changed">What changed</button>
-          <button data-tool="activity">Activity</button>
-          <button data-tool="hotspots">Hotspots</button>
-        </div>
-        <div class="row">
-          <div><label>Latitude</label><input type="number" id="lat" step="0.0001"></div>
-          <div><label>Longitude</label><input type="number" id="lon" step="0.0001"></div>
-        </div>
-        <div class="hint"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7 18 2-8 8-2z"/></svg>Click the map to move the search centre</div>
-        <label>Radius</label>
-        <div class="range-row"><input type="range" id="radius" min="1" max="100" value="40"><output id="radiusOut"></output></div>
-        <label>From (UTC)</label><input type="datetime-local" id="start">
-        <label>To (UTC)</label><input type="datetime-local" id="end">
-        <div class="chips" style="margin-top:8px" id="quickRanges">
-          <span class="chip" data-hours="1">1 h</span><span class="chip" data-hours="24">24 h</span>
-          <span class="chip" data-hours="168">7 d</span><span class="chip" data-hours="720">30 d</span>
-          <span class="chip" data-hours="1440">60 d</span>
-        </div>
-        <div id="activityFields" hidden>
-          <div class="row">
-            <div><label>Bucket (min)</label><input type="number" id="bucket" value="60" min="1"></div>
-            <div><label>Split by</label><select id="groupBy"><option value="">Nothing</option><option value="source_id">Source</option><option value="event_type">Event type</option></select></div>
-          </div>
-        </div>
-        <div id="hotFields" hidden>
-          <div class="row">
-            <div><label>Cell size (m)</label><input type="number" id="cell" value="250" min="10"></div>
-            <div><label>Top</label><input type="number" id="top" value="15" min="1" max="500"></div>
-          </div>
-        </div>
-        <div id="areaFilters">
-          <label>Event type</label><select id="etype"><option value="">Any</option></select>
-          <label>Minimum confidence</label>
-          <div class="range-row"><input type="range" id="minconf" min="0" max="100" value="0"><output id="minconfOut"></output></div>
-        </div>
-      </div>
+  <!-- BUILDER -->
+  <section class="view" id="v-builder"><div class="pad">
+    <button class="back" data-home>← All questions</button>
+    <div class="seg" id="modes"><button class="on" data-mode="area">A place</button><button data-mode="entity">A thing</button><button data-mode="fuse">Combine sources</button></div>
 
-      <div data-panel="entity" hidden>
-        <p class="desc">What happened to something, and what was around it?</p>
-        <div class="seg" id="entityTool" style="grid-template-columns:1fr 1fr">
-          <button class="on" data-tool="history_before">Before an event</button>
-          <button data-tool="nearby_entities">Nearby</button>
-        </div>
-        <label>Entity</label><input type="text" id="entity" list="entities" value="Machine_47">
-        <datalist id="entities"></datalist>
-        <div id="beforeFields">
-          <label>Event</label><input type="text" id="anchor" value="failure">
-          <label>Look back (minutes)</label><input type="number" id="lookback" value="60" min="0">
-        </div>
-        <div id="nearbyFields" hidden>
-          <label>At (UTC)</label><input type="datetime-local" id="at">
-          <div class="row">
-            <div><label>Radius (m)</label><input type="number" id="nradius" value="50" min="0"></div>
-            <div><label>Window (min)</label><input type="number" id="nwindow" value="30" min="0"></div>
-          </div>
-        </div>
+    <div data-panel="area">
+      <div class="seg" id="areaTool">
+        <button class="on" data-tool="events_near">Events</button><button data-tool="what_changed">Changes</button>
+        <button data-tool="activity">Over time</button><button data-tool="hotspots">Hotspots</button>
       </div>
-
-      <div data-panel="fuse" hidden>
-        <p class="desc">Sources disagree about where something is. Combine them by trust and see which are outliers.</p>
-        <label>Entity</label><input type="text" id="fentity" list="entities" value="Flood_Event_1">
-        <label>From (UTC)</label><input type="datetime-local" id="fstart">
-        <label>To (UTC)</label><input type="datetime-local" id="fend">
+      <div class="tip">📍 Click the map to choose the place.</div>
+      <div class="row">
+        <div><label>Latitude</label><input type="number" id="lat" step="0.0001"></div>
+        <div><label>Longitude</label><input type="number" id="lon" step="0.0001"></div>
       </div>
-
-      <button class="primary" id="run">Run query</button>
+      <label>Search radius</label>
+      <div class="range"><input type="range" id="radius" min="1" max="100" value="40"><output id="radiusOut"></output></div>
+      <label>From (UTC)</label><input type="datetime-local" id="start">
+      <label>To (UTC)</label><input type="datetime-local" id="end">
+      <div class="chips" id="quick"><span class="chip" data-h="1">Last hour</span><span class="chip" data-h="24">Last day</span><span class="chip" data-h="168">Last week</span><span class="chip" data-h="720">Last month</span></div>
+      <div id="f-events">
+        <label>Only this kind of event</label><select id="etype"><option value="">Any</option></select>
+        <label>Minimum confidence</label>
+        <div class="range"><input type="range" id="minconf" min="0" max="100" value="0"><output id="minconfOut"></output></div>
+      </div>
+      <div id="f-activity" hidden><div class="row">
+        <div><label>Bucket (minutes)</label><input type="number" id="bucket" value="60" min="1"></div>
+        <div><label>Split by</label><select id="groupBy"><option value="">Nothing</option><option value="source_id">Source</option><option value="event_type">Event type</option></select></div>
+      </div></div>
+      <div id="f-hot" hidden><div class="row">
+        <div><label>Cell size (m)</label><input type="number" id="cell" value="250" min="10"></div>
+        <div><label>Show top</label><input type="number" id="top" value="15" min="1" max="100"></div>
+      </div></div>
     </div>
 
-    <div class="section">
-      <h3>Try a scenario</h3>
-      <div class="chips" id="scenarios">
-        <span class="chip" data-s="m47">Why did Machine_47 fail?</span>
-        <span class="chip" data-s="flood">Where is the flood?</span>
-        <span class="chip" data-s="solar">Solar farm changes</span>
-        <span class="chip" data-s="factory">Factory, last 24 h</span>
-      </div>
+    <div data-panel="entity" hidden>
+      <div class="seg" id="entityTool"><button class="on" data-tool="history_before">What led up to an event</button><button data-tool="nearby_entities">What was nearby</button></div>
+      <label>Thing (entity)</label><input type="text" id="entity" list="entities" value="Machine_47"><datalist id="entities"></datalist>
+      <div id="f-before"><label>The event</label><input type="text" id="anchor" value="failure">
+        <label>Look back (minutes)</label><input type="number" id="lookback" value="60" min="0"></div>
+      <div id="f-nearby" hidden><label>At (UTC)</label><input type="datetime-local" id="at">
+        <div class="row"><div><label>Within (m)</label><input type="number" id="nradius" value="50" min="0"></div>
+        <div><label>± minutes</label><input type="number" id="nwindow" value="30" min="0"></div></div></div>
     </div>
 
-    <div class="section">
-      <h3>Event types</h3>
-      <div class="legend" id="legend"></div>
+    <div data-panel="fuse" hidden>
+      <div class="tip">When several sources report the same thing in slightly different places, GeoMemory combines them by how trustworthy each is, and flags the ones that don't fit.</div>
+      <label>Thing (entity)</label><input type="text" id="fentity" list="entities" value="Flood_Event_1">
+      <label>From (UTC)</label><input type="datetime-local" id="fstart">
+      <label>To (UTC)</label><input type="datetime-local" id="fend">
     </div>
-  </aside>
+    <button class="primary" id="run">Get answer</button>
+  </div></section>
 
-  <div id="mapwrap">
-    <div id="map"></div>
-    <div id="mapmsg"></div>
-    <div class="map-badge" id="mapBadge">Loading…</div>
-  </div>
+  <!-- ANSWER -->
+  <section class="view" id="v-answer"><div class="pad" id="answer"></div></section>
+</aside>
 
-  <aside class="right" id="results">
-    <div class="empty">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <div>Run a query or pick a scenario.<br>Every result shows its source and confidence.</div>
-    </div>
-  </aside>
-</main>
-
-<main id="bench"><div class="bench-wrap" id="benchBody"><div class="empty">Loading benchmark results…</div></div></main>
-
-<div id="drawer"></div>
+<div id="legend" class="glass"></div>
+<aside id="drawer" class="glass"></aside>
+<main id="bench"><div class="wrap" id="benchBody"></div></main>
 
 <script>
-const $ = s => document.querySelector(s);
-const $$ = s => [...document.querySelectorAll(s)];
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const PALETTE = ["#2563eb","#dc2626","#16a34a","#d97706","#7c3aed","#0891b2","#db2777","#65a30d","#ea580c","#4f46e5","#0d9488","#a16207","#9333ea"];
+const SEMANTIC = {failure:"#f87171", crack:"#ef4444", closed:"#fb7185", flood_extent:"#38bdf8", temperature_anomaly:"#fb923c",
+  vibration_anomaly:"#fbbf24", hotspot:"#facc15", maintenance:"#a78bfa", normal:"#34d399", telemetry:"#64748b",
+  position:"#94a3b8", pickup:"#6d8bff", earthquake:"#f472b6"};
+const PALETTE = ["#6d8bff","#f472b6","#34d399","#fbbf24","#a78bfa","#38bdf8","#fb923c","#e879f9","#4ade80","#f87171"];
 const colorOf = {};
-// Meaning-based colours: bad things red/orange, routine things muted.
-const SEMANTIC = {failure: "#dc2626", crack: "#b91c1c", closed: "#be123c", flood_extent: "#0284c7",
-  temperature_anomaly: "#ea580c", vibration_anomaly: "#d97706", hotspot: "#f59e0b",
-  maintenance: "#7c3aed", normal: "#16a34a", telemetry: "#94a3b8", position: "#64748b"};
-let overview = null, map = null, mapReady = false, mode = "area", lastResult = null, selected = null;
-const state = { lat: 11.0168, lon: 76.9558, areaTool: "events_near", entityTool: "history_before" };
+let fitted = false, ov = null, map = null, mapReady = false, mode = "area", lastRes = null, lastQ = "";
+const st = {lat: 0, lon: 0, areaTool: "events_near", entityTool: "history_before"};
 
-/* ---------- utilities ---------- */
-const radiusM = () => Math.round(10 ** (1 + (+$("#radius").value) / 100 * 4.3)); // 10 m .. 200 km
-const fmtM = m => m >= 1000 ? `${(m/1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${m} m`;
+/* ---------- helpers ---------- */
+const radiusM = () => Math.round(10 ** (1 + (+$("#radius").value) / 100 * 4.3));
+const fmtM = m => m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${Math.round(m)} m`;
 const toLocal = iso => iso ? iso.slice(0, 16) : "";
 const fromLocal = v => v ? new Date(v + ":00Z").toISOString() : null;
-const fmtTime = iso => { const d = new Date(iso); return d.toISOString().slice(5, 16).replace("T", " "); };
-const fmtNum = (x, d = 2) => x == null ? "–" : typeof x === "number" ? x.toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: Number.isInteger(x) ? 0 : Math.min(d, 2)}) : esc(x);
-const nowIso = () => overview?.end || new Date().toISOString();
-const shift = (iso, hours) => new Date(new Date(iso).getTime() + hours * 3600e3).toISOString();
-
+const shift = (iso, h) => new Date(new Date(iso).getTime() + h * 3600e3).toISOString();
+const nowIso = () => ov?.end || new Date().toISOString();
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const nice = iso => { const d = new Date(iso); return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${String(d.getUTCHours()).padStart(2,"0")}:${String(d.getUTCMinutes()).padStart(2,"0")}`; };
+const num = (x, d = 0) => x == null ? "–" : Number(x).toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: 0});
+const pct = x => `${Math.round(x * 100)}%`;
+const human = s => String(s).replace(/_/g, " ");
+const plural = (n, w) => `${num(n)} ${w}${n === 1 ? "" : "s"}`;
 async function api(path, body) {
   const r = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {});
   return r.json();
 }
-
 function circle(lat, lon, m, n = 72) {
-  const R = 6371008.8, pts = [];
+  const R = 6371008.8, pts = [], d = m / R, la = lat * Math.PI / 180, lo = lon * Math.PI / 180;
   for (let i = 0; i <= n; i++) {
-    const b = 2 * Math.PI * i / n, d = m / R, la = lat * Math.PI / 180, lo = lon * Math.PI / 180;
+    const b = 2 * Math.PI * i / n;
     const la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(b));
     const lo2 = lo + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2));
     pts.push([lo2 * 180 / Math.PI, la2 * 180 / Math.PI]);
   }
   return {type: "Feature", geometry: {type: "Polygon", coordinates: [pts]}, properties: {}};
 }
-const fc = features => ({type: "FeatureCollection", features});
-const ptFeature = o => ({type: "Feature", geometry: {type: "Point", coordinates: [o.lon, o.lat]},
-  properties: {id: o.observation_id, ev: o.event_type, color: colorOf[o.event_type] || "#888",
-               conf: o.confidence, entity: o.entity_id, src: o.source_id}});
+const fc = f => ({type: "FeatureCollection", features: f});
+const pt = (lon, lat, p) => ({type: "Feature", geometry: {type: "Point", coordinates: [lon, lat]}, properties: p});
 
 /* ---------- theme & tabs ---------- */
-$("#theme").onclick = () => {
-  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-  const cur = document.documentElement.dataset.theme || (dark ? "dark" : "light");
-  document.documentElement.dataset.theme = cur === "dark" ? "light" : "dark";
-  try { localStorage.setItem("gm-theme", document.documentElement.dataset.theme); } catch {}
-  setMapStyle();
-};
 try { const t = localStorage.getItem("gm-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
-const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; };
-
+const dark = () => document.documentElement.dataset.theme !== "light";
+$("#theme").onclick = () => {
+  document.documentElement.dataset.theme = dark() ? "light" : "dark";
+  try { localStorage.setItem("gm-theme", document.documentElement.dataset.theme); } catch {}
+  if (map) { mapReady = false; map.setStyle(mapStyle()); }
+};
 $$("nav button").forEach(b => b.onclick = () => {
   $$("nav button").forEach(x => x.classList.toggle("on", x === b));
-  $("#explore").classList.toggle("on", b.dataset.tab === "explore");
-  $("#bench").classList.toggle("on", b.dataset.tab === "bench");
-  if (b.dataset.tab === "bench") loadBench(); else map?.resize();
+  const bench = b.dataset.tab === "bench";
+  $("#bench").classList.toggle("on", bench);
+  if (bench) loadBench();
 });
+function show(view) {
+  $$(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + view));
+  $("#panel .view.on").scrollTop = 0;
+}
+$$("[data-home]").forEach(b => b.onclick = () => { show("home"); clearResult(); });
+$("#toBuilder").onclick = () => show("builder");
 
-/* ---------- form wiring ---------- */
+/* ---------- builder wiring ---------- */
 function seg(id, key, after) {
   $$(`#${id} button`).forEach(b => b.onclick = () => {
-    $$(`#${id} button`).forEach(x => x.classList.toggle("on", x === b));
-    state[key] = b.dataset.tool; after?.();
+    $$(`#${id} button`).forEach(x => x.classList.toggle("on", x === b)); st[key] = b.dataset.tool; after?.();
   });
 }
-$$("#modes button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+function setTool(id, tool) { $$(`#${id} button`).find(b => b.dataset.tool === tool)?.click(); }
 function setMode(m) {
   mode = m;
   $$("#modes button").forEach(x => x.classList.toggle("on", x.dataset.mode === m));
   $$("[data-panel]").forEach(p => p.hidden = p.dataset.panel !== m);
-  drawSearchArea();
+  drawArea();
 }
+$$("#modes button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
 seg("areaTool", "areaTool", () => {
-  $("#areaFilters").hidden = state.areaTool !== "events_near";
-  $("#activityFields").hidden = state.areaTool !== "activity";
-  $("#hotFields").hidden = state.areaTool !== "hotspots";
+  $("#f-events").hidden = st.areaTool !== "events_near";
+  $("#f-activity").hidden = st.areaTool !== "activity";
+  $("#f-hot").hidden = st.areaTool !== "hotspots";
 });
 seg("entityTool", "entityTool", () => {
-  $("#beforeFields").hidden = state.entityTool !== "history_before";
-  $("#nearbyFields").hidden = state.entityTool !== "nearby_entities";
+  $("#f-before").hidden = st.entityTool !== "history_before";
+  $("#f-nearby").hidden = st.entityTool !== "nearby_entities";
 });
-function setTool(id, tool) { $$(`#${id} button`).forEach(b => b.dataset.tool === tool && b.click()); }
-
-const syncOutputs = () => {
-  $("#radiusOut").textContent = fmtM(radiusM());
-  $("#minconfOut").textContent = (+$("#minconf").value / 100).toFixed(2);
-  drawSearchArea();
-};
-["#radius", "#minconf"].forEach(s => $(s).addEventListener("input", syncOutputs));
-["#lat", "#lon"].forEach(s => $(s).addEventListener("change", () => {
-  state.lat = +$("#lat").value; state.lon = +$("#lon").value; drawSearchArea();
-}));
-$$("#quickRanges .chip").forEach(c => c.onclick = () => {
-  $("#end").value = toLocal(nowIso()); $("#start").value = toLocal(shift(nowIso(), -c.dataset.hours));
-});
-function setRadius(m) { $("#radius").value = Math.max(1, Math.min(100, (Math.log10(m) - 1) / 4.3 * 100)); syncOutputs(); }
-function setCenter(lat, lon) {
-  state.lat = lat; state.lon = lon;
-  $("#lat").value = lat.toFixed(5); $("#lon").value = lon.toFixed(5); drawSearchArea();
-}
+const sync = () => { $("#radiusOut").textContent = fmtM(radiusM()); $("#minconfOut").textContent = pct(+$("#minconf").value / 100); drawArea(); };
+["#radius", "#minconf"].forEach(s => $(s).addEventListener("input", sync));
+["#lat", "#lon"].forEach(s => $(s).addEventListener("change", () => { st.lat = +$("#lat").value; st.lon = +$("#lon").value; drawArea(); }));
+$$("#quick .chip").forEach(c => c.onclick = () => { $("#end").value = toLocal(nowIso()); $("#start").value = toLocal(shift(nowIso(), -c.dataset.h)); });
+function setRadius(m) { $("#radius").value = Math.max(1, Math.min(100, (Math.log10(m) - 1) / 4.3 * 100)); sync(); }
+function setCenter(lat, lon) { st.lat = lat; st.lon = lon; $("#lat").value = lat.toFixed(5); $("#lon").value = lon.toFixed(5); drawArea(); }
 
 /* ---------- map ---------- */
-const STYLES = { light: "https://tiles.openfreemap.org/styles/positron",
-                 dark: "https://tiles.openfreemap.org/styles/dark" };
+function mapStyle() {
+  const v = dark() ? "dark_all" : "light_all";
+  return {version: 8, sources: {base: {type: "raster", tileSize: 256,
+    tiles: ["a", "b", "c", "d"].map(s => `https://${s}.basemaps.cartocdn.com/${v}/{z}/{x}/{y}@2x.png`),
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>'}},
+    layers: [{id: "bg", type: "background", paint: {"background-color": dark() ? "#0b0f17" : "#eef1f6"}},
+             {id: "base", type: "raster", source: "base"}]};
+}
 function initMap() {
-  if (!window.maplibregl) {
-    $("#mapmsg").style.display = "grid";
-    $("#mapmsg").innerHTML = "<div><b>Map library could not load.</b><br>Queries still work; results appear on the right.</div>";
-    $("#mapBadge").hidden = true;
-    return;
-  }
-  map = new maplibregl.Map({ container: "map", style: STYLES[isDark() ? "dark" : "light"],
-                             center: [state.lon, state.lat], zoom: overview?.dataset === "uber" ? 10.5 : 11, attributionControl: {compact: true} });
-  map.addControl(new maplibregl.NavigationControl({showCompass: false}), "top-right");
+  if (!window.maplibregl) return;
+  map = new maplibregl.Map({container: "map", style: mapStyle(), center: [st.lon, st.lat],
+    zoom: ov?.dataset === "uber" ? 10.5 : 12, attributionControl: {compact: true}});
+  map.addControl(new maplibregl.NavigationControl({showCompass: false}), "bottom-right");
   map.on("style.load", addLayers);
-  map.on("error", e => { if (!mapReady) $("#mapBadge").textContent = "Map tiles unavailable – data layers still shown"; });
   map.on("click", e => {
     const hit = map.queryRenderedFeatures(e.point, {layers: ["hits"]})[0];
     if (hit) return openEvidence(hit.properties.id);
-    if (mode === "area") setCenter(e.lngLat.lat, e.lngLat.lng);
+    if ($("#v-builder").classList.contains("on") && mode === "area") setCenter(e.lngLat.lat, e.lngLat.lng);
   });
-  map.on("mouseenter", "hits", () => map.getCanvas().style.cursor = "pointer");
-  map.on("mouseleave", "hits", () => map.getCanvas().style.cursor = "");
-  const pop = new maplibregl.Popup({closeButton: false, closeOnClick: false, offset: 8});
+  const pop = new maplibregl.Popup({closeButton: false, closeOnClick: false, offset: 10});
   map.on("mousemove", "hits", e => {
+    map.getCanvas().style.cursor = "pointer";
     const p = e.features[0].properties;
-    pop.setLngLat(e.lngLat).setHTML(`<b>${esc(p.ev)}</b><br>${esc(p.entity)}<br><span style="color:#888">${esc(p.src)} · ${(+p.conf).toFixed(2)}</span>`).addTo(map);
+    pop.setLngLat(e.lngLat).setHTML(`<b>${esc(human(p.ev))}</b><br>${esc(p.entity)}<br><span style="color:#888">${esc(p.src)} · ${pct(+p.conf)} sure</span>`).addTo(map);
   });
-  map.on("mouseleave", "hits", () => pop.remove());
+  map.on("mouseleave", "hits", () => { map.getCanvas().style.cursor = ""; pop.remove(); });
 }
-function setMapStyle() { if (map) { mapReady = false; map.setStyle(STYLES[isDark() ? "dark" : "light"]); } }
 function addLayers() {
-  const add = (id, data) => map.getSource(id) ? map.getSource(id).setData(data) : map.addSource(id, {type: "geojson", data});
-  add("all", fc([])); add("area", fc([])); add("unc", fc([])); add("hitsrc", fc([])); add("fused", fc([])); add("hot", fc([]));
-  map.addLayer({id: "all", type: "circle", source: "all", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 1.5, 15, 4],
-    "circle-color": ["get", "color"], "circle-opacity": 0.35}});
-  map.addLayer({id: "area-fill", type: "fill", source: "area", paint: {"fill-color": "#2563eb", "fill-opacity": 0.07}});
-  map.addLayer({id: "area-line", type: "line", source: "area", paint: {"line-color": "#2563eb", "line-width": 1.5, "line-dasharray": [2, 2]}});
-  map.addLayer({id: "unc", type: "fill", source: "unc", paint: {"fill-color": ["get", "color"], "fill-opacity": 0.12}});
-  map.addLayer({id: "hits", type: "circle", source: "hitsrc", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 16, 8],
-    "circle-color": ["get", "color"], "circle-stroke-color": isDark() ? "#0d1014" : "#fff",
-    "circle-stroke-width": 1.5, "circle-opacity": ["interpolate", ["linear"], ["get", "conf"], 0, 0.35, 1, 1]}});
-  map.addLayer({id: "hot", type: "circle", source: "hot", paint: {
-    "circle-radius": ["interpolate", ["linear"], ["sqrt", ["get", "share"]], 0, 3, 1, 14],
-    "circle-color": "#dc2626", "circle-opacity": 0.6, "circle-stroke-color": "#dc2626", "circle-stroke-width": 1.5}});
-  map.addLayer({id: "hot-label", type: "symbol", source: "hot", layout: {"text-field": ["get", "rank"], "text-size": 11,
-    "text-font": ["Noto Sans Bold"], "text-allow-overlap": true}, paint: {"text-color": "#fff"}});
-  map.addLayer({id: "fused", type: "line", source: "fused", paint: {"line-color": "#16a34a", "line-width": 2.5}});
+  for (const id of ["all", "area", "unc", "hits", "fused", "hot"]) if (!map.getSource(id)) map.addSource(id, {type: "geojson", data: fc([])});
+  map.addLayer({id: "all", type: "circle", source: "all", paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 1.5, 16, 4],
+    "circle-color": ["get", "color"], "circle-opacity": .55}});
+  map.addLayer({id: "area-fill", type: "fill", source: "area", paint: {"fill-color": "#6d8bff", "fill-opacity": .08}});
+  map.addLayer({id: "area-line", type: "line", source: "area", paint: {"line-color": "#6d8bff", "line-width": 2, "line-dasharray": [2, 2]}});
+  map.addLayer({id: "unc", type: "fill", source: "unc", paint: {"fill-color": ["get", "color"], "fill-opacity": .15}});
+  map.addLayer({id: "hot", type: "circle", source: "hot", paint: {"circle-radius": ["interpolate", ["linear"], ["sqrt", ["get", "share"]], 0, 5, 1, 20],
+    "circle-color": "#f472b6", "circle-opacity": .55, "circle-stroke-color": "#fff", "circle-stroke-width": 1.5}});
+  map.addLayer({id: "hits", type: "circle", source: "hits", paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 5, 17, 10],
+    "circle-color": ["get", "color"], "circle-stroke-color": "#fff", "circle-stroke-width": 2}});
+  map.addLayer({id: "fused", type: "line", source: "fused", paint: {"line-color": "#34d399", "line-width": 3}});
   mapReady = true;
-  $("#mapBadge").textContent = overview ? `${overview.count.toLocaleString()} observations${overview.sampled ? " (sampled)" : ""}` : "";
-  drawAll(); drawSearchArea(); if (lastResult) drawResult(lastResult);
+  drawAll(); drawArea(); if (lastRes) drawResult(lastRes);
+  if (!fitted && ov?.points?.length) { fitted = true; fitPoints(ov.points.map(([la, lo]) => [lo, la]), 0); }
 }
-const setData = (id, data) => mapReady && map.getSource(id)?.setData(data);
-function drawAll() { if (overview) setData("all", fc(overview.observations.map(ptFeature))); }
-function drawSearchArea() {
-  setData("area", mode === "area" ? fc([circle(state.lat, state.lon, radiusM())]) : fc([]));
+const setData = (id, d) => mapReady && map.getSource(id)?.setData(d);
+function drawAll() {
+  if (!ov) return;
+  setData("all", fc(ov.points.map(([la, lo, t]) => pt(lo, la, {color: colorOf[ov.event_types[t]] || "#888"}))));
+}
+function drawArea() {
+  const showArea = $("#v-builder").classList.contains("on") && mode === "area";
+  setData("area", showArea ? fc([circle(st.lat, st.lon, radiusM())]) : fc([]));
+}
+function clearResult() { lastRes = null; ["unc", "hits", "fused", "hot", "area"].forEach(id => setData(id, fc([]))); $("#drawer").classList.remove("on"); }
+function fitPoints(pts, duration = 700) {
+  if (!pts.length || !map) return;
+  // Ignore the farthest 2% of points so one stray record can't zoom the map out to the world.
+  const trim = a => { const s = [...a].sort((x, y) => x - y), k = Math.floor(s.length * .01); return [s[k], s[s.length - 1 - k]]; };
+  const [x0, x1] = trim(pts.map(p => p[0])), [y0, y1] = trim(pts.map(p => p[1]));
+  const wide = innerWidth > 860;
+  map.fitBounds([[x0, y0], [x1, y1]], {padding: wide ? {left: 450, right: 80, top: 100, bottom: 60} : {top: 80, bottom: innerHeight * .6, left: 30, right: 30}, maxZoom: 17, duration});
 }
 function drawResult(res) {
-  const obs = res.observations || [];
-  const hs = res.hotspots || [];
+  const obs = res.observations || [], hs = res.hotspots || [];
   const maxc = Math.max(1, ...hs.map(h => h.count));
-  setData("hot", fc(hs.map((h, i) => ({type: "Feature", geometry: {type: "Point", coordinates: [h.lon, h.lat]},
-    properties: {share: h.count / maxc, rank: String(i + 1)}}))));
-  setData("hitsrc", fc(obs.map(ptFeature)));
+  setData("hits", fc(obs.map(o => pt(o.lon, o.lat, {id: o.observation_id, ev: o.event_type, entity: o.entity_id, src: o.source_id,
+    conf: o.confidence, color: colorOf[o.event_type] || "#888"}))));
   setData("unc", fc(obs.filter(o => o.uncertainty_m > 0).map(o => ({...circle(o.lat, o.lon, o.uncertainty_m, 36), properties: {color: colorOf[o.event_type] || "#888"}}))));
-  setData("fused", res.lat != null ? fc([circle(res.lat, res.lon, Math.max(res.uncertainty_m * 2, 3))]) : fc([]));
+  setData("fused", res.lat != null ? fc([circle(res.lat, res.lon, Math.max(res.uncertainty_m * 2, 4))]) : fc([]));
+  setData("hot", fc(hs.map(h => pt(h.lon, h.lat, {share: h.count / maxc}))));
+  if (res._area) setData("area", fc([circle(res._area.lat, res._area.lon, res._area.r)]));
   if (!map) return;
   const pts = obs.map(o => [o.lon, o.lat]).concat(hs.map(h => [h.lon, h.lat]));
   if (res.lat != null) pts.push([res.lon, res.lat]);
-  if (mode === "area") pts.push(...circle(state.lat, state.lon, radiusM(), 8).geometry.coordinates[0]);
-  if (pts.length) {
-    const b = pts.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(pts[0], pts[0]));
-    map.fitBounds(b, {padding: 60, maxZoom: 17, duration: 600});
-  }
+  if (res._area) pts.push(...circle(res._area.lat, res._area.lon, res._area.r, 8).geometry.coordinates[0]);
+  fitPoints(pts);
 }
 
 /* ---------- queries ---------- */
-async function run() {
-  let tool, args;
+function builderArgs() {
   if (mode === "area") {
-    tool = state.areaTool;
-    args = {lat: +$("#lat").value, lon: +$("#lon").value, radius_m: radiusM(),
-            start: fromLocal($("#start").value), end: fromLocal($("#end").value), limit: 1000};
-    if (tool === "events_near") {
-      if ($("#etype").value) args.event_type = $("#etype").value;
-      args.min_confidence = +$("#minconf").value / 100;
-    } else if (tool === "activity") {
-      delete args.limit; args.bucket_minutes = +$("#bucket").value;
-      if ($("#groupBy").value) args.group_by = $("#groupBy").value;
-    } else if (tool === "hotspots") {
-      delete args.limit; args.cell_m = +$("#cell").value; args.top = +$("#top").value;
-    }
-  } else if (mode === "entity") {
-    tool = state.entityTool;
-    args = tool === "history_before"
-      ? {entity_id: $("#entity").value.trim(), event_type: $("#anchor").value.trim() || undefined,
-         lookback_minutes: +$("#lookback").value}
-      : {entity_id: $("#entity").value.trim(), at: fromLocal($("#at").value),
-         radius_m: +$("#nradius").value, window_minutes: +$("#nwindow").value};
-  } else {
-    tool = "fused_location";
-    args = {entity_id: $("#fentity").value.trim(), start: fromLocal($("#fstart").value), end: fromLocal($("#fend").value)};
+    const a = {lat: +$("#lat").value, lon: +$("#lon").value, radius_m: radiusM(), start: fromLocal($("#start").value), end: fromLocal($("#end").value)};
+    if (st.areaTool === "events_near") { a.limit = 500; if ($("#etype").value) a.event_type = $("#etype").value; a.min_confidence = +$("#minconf").value / 100; }
+    if (st.areaTool === "what_changed") a.limit = 500;
+    if (st.areaTool === "activity") { a.bucket_minutes = +$("#bucket").value; if ($("#groupBy").value) a.group_by = $("#groupBy").value; }
+    if (st.areaTool === "hotspots") { a.cell_m = +$("#cell").value; a.top = +$("#top").value; }
+    return [st.areaTool, a, `What happened within ${fmtM(radiusM())} of this spot?`];
   }
-  $("#results").innerHTML = `<div class="empty">Querying…</div>`;
+  if (mode === "entity") {
+    if (st.entityTool === "history_before")
+      return ["history_before", {entity_id: $("#entity").value.trim(), event_type: $("#anchor").value.trim() || undefined, lookback_minutes: +$("#lookback").value},
+              `What led up to the ${human($("#anchor").value)} of ${$("#entity").value}?`];
+    return ["nearby_entities", {entity_id: $("#entity").value.trim(), at: fromLocal($("#at").value), radius_m: +$("#nradius").value, window_minutes: +$("#nwindow").value},
+            `What was near ${$("#entity").value}?`];
+  }
+  return ["fused_location", {entity_id: $("#fentity").value.trim(), start: fromLocal($("#fstart").value), end: fromLocal($("#fend").value)},
+          `Where exactly is ${human($("#fentity").value)}?`];
+}
+$("#run").onclick = () => { const [t, a, q] = builderArgs(); ask(t, a, q); };
+
+async function ask(tool, args, question) {
+  lastQ = question;
+  show("answer");
+  $("#answer").innerHTML = `<button class="back" data-home>← All questions</button><div class="q">${esc(question)}</div><div class="loading"><div class="spin"></div>Searching the memory…</div>`;
+  $$("#answer [data-home]").forEach(b => b.onclick = () => { show("home"); clearResult(); });
   const t0 = performance.now();
   let res;
-  try { res = await api(`/tools/${tool}`, args); }
-  catch (e) { res = {ok: false, error: "Server unreachable. Is `python -m geomemory.demo` running?"}; }
+  try { res = await api(`/tools/${tool}`, args); } catch { res = {ok: false, error: "The server didn't respond. Please try again in a moment."}; }
   res._ms = performance.now() - t0; res._tool = tool;
-  if (tool === "fused_location" && res.ok) {
-    const ids = [...res.support, ...res.outliers];
-    res.observations = (await Promise.all(ids.map(id => api("/tools/evidence", {observation_id: id}))))
-      .filter(r => r.ok).map(r => r.observation)
-      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  if (args.lat != null && args.radius_m != null) res._area = {lat: args.lat, lon: args.lon, r: args.radius_m};
+  if (res.ok && (tool === "fused_location" || tool === "nearby_entities")) {
+    const ids = tool === "fused_location" ? [...res.support, ...res.outliers] : res.entities.flatMap(e => e.evidence);
+    res.observations = (await Promise.all([...new Set(ids)].slice(0, 60).map(id => api("/tools/evidence", {observation_id: id}))))
+      .filter(r => r.ok).map(r => r.observation).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   }
-  if (tool === "nearby_entities" && res.ok) {
-    const ids = res.entities.flatMap(e => e.evidence);
-    res.observations = (await Promise.all(ids.map(id => api("/tools/evidence", {observation_id: id}))))
-      .filter(r => r.ok).map(r => r.observation);
-  }
-  lastResult = res;
-  renderResult(res);
+  lastRes = res;
+  renderAnswer(res);
   if (res.ok) drawResult(res);
 }
-$("#run").onclick = run;
 
-function renderResult(res) {
-  const el = $("#results");
-  if (!res.ok) { el.innerHTML = `<div class="section"><div class="err">${esc(res.error)}</div></div>`; return; }
-  const obs = res.observations || [];
-  let html = `<div class="section"><h3>Result · ${esc(res._tool.replace(/_/g, " "))}</h3><div class="summary">
-    <div class="kpi"><b>${(res.count ?? obs.length).toLocaleString()}</b><span>observations</span></div>
-    <div class="kpi"><b>${(res.sources || [...new Set(obs.map(o => o.source_id))]).length}</b><span>sources</span></div>
-    <div class="kpi"><b>${res._ms.toFixed(0)}<small style="font-size:12px"> ms</small></b><span>round trip</span></div>
-  </div>${res.truncated ? `<p class="desc" style="margin:10px 0 0">Showing the first ${obs.length}.</p>` : ""}</div>`;
-
-  if (res._tool === "what_changed") {
-    html += `<div class="section"><h3>Changes</h3>`;
-    if (!res.appeared.length && !res.changed.length) html += `<p class="desc">Nothing appeared or changed.</p>`;
-    html += `<ul class="changes">` +
-      res.appeared.map(e => `<li><b>${esc(e)}</b> <span class="desc">appeared</span></li>`).join("") +
-      res.changed.map(c => `<li><b>${esc(c.entity_id)}</b><br>${esc(c.from)}<span class="arrow">→</span>${esc(c.to)}${c.moved_m > 1 ? ` <span class="desc">· moved ${fmtM(Math.round(c.moved_m))}</span>` : ""}</li>`).join("") +
-      `</ul></div>`;
+/* ---------- answers in plain language ---------- */
+function headline(r) {
+  const o = r.observations || [];
+  switch (r._tool) {
+    case "history_before": {
+      if (!r.anchor) return `Here is everything recorded for <em>${esc(r.entity_id)}</em> in that window.`;
+      const n = r.timeline.length;
+      if (!n) return `Nothing was recorded for <em>${esc(r.entity_id)}</em> in the time before its ${esc(human(r.anchor.event_type))}.`;
+      const first = r.timeline[0];
+      return `<em>${esc(r.entity_id)}</em> had a ${esc(human(r.anchor.event_type))} at ${nice(r.anchor.timestamp)}. In the ${Math.round(-first.offset_minutes)} minutes before, ${plural(n, "warning sign")} ${n === 1 ? "was" : "were"} recorded, starting with a <em>${esc(human(first.event_type))}</em>.`;
+    }
+    case "fused_location": {
+      const out = r.outliers.length;
+      return `${plural(r.support.length + out, "report")} from ${plural(r.sources.length, "source")} disagree slightly. Weighting each by how reliable it is puts <em>${esc(human(r.entity_id))}</em> within <em>±${num(r.uncertainty_m, 1)} m</em> of one spot.` +
+        (out ? ` ${plural(out, "report")} didn't fit and ${out === 1 ? "was" : "were"} flagged as ${out === 1 ? "an outlier" : "outliers"}: kept, but not trusted.` : " Every report agreed.");
+    }
+    case "what_changed": {
+      const a = r.appeared.length, c = r.changed.length;
+      if (!a && !c) return `Nothing new appeared and nothing changed in this area during that time.`;
+      return `In this area, ${a ? `<em>${plural(a, "new thing")}</em> appeared` : "nothing new appeared"}${c ? ` and <em>${plural(c, "thing")}</em> changed state` : ""}.`;
+    }
+    case "events_near":
+      return r.count ? `Found <em>${plural(r.count, "event")}</em> here, reported by ${plural(r.sources.length, "source")}.` : `No events were recorded here in that time window.`;
+    case "activity": {
+      if (!r.count) return `No activity was recorded here in that window.`;
+      const peak = r.buckets.reduce((m, b) => b.count > m.count ? b : m, r.buckets[0]);
+      return `<em>${num(r.count)}</em> observations here. The busiest moment was <em>${nice(peak.start)}</em> UTC, with ${num(peak.count)} in ${num(r.bucket_minutes)} minutes.`;
+    }
+    case "hotspots":
+      return r.hotspots.length ? `The busiest spot had <em>${num(r.hotspots[0].count)}</em> observations, out of ${num(r.count)} in the whole area.` : `Nothing was recorded in this area and window.`;
+    case "nearby_entities":
+      return r.entities.length ? `<em>${plural(r.entities.length, "thing")}</em> ${r.entities.length === 1 ? "was" : "were"} near <em>${esc(r.entity_id)}</em>; the closest was ${esc(r.entities[0].entity_id)}, ${fmtM(r.entities[0].distance_m)} away.` : `Nothing else was nearby at that time.`;
   }
-  if (res._tool === "activity") html += activityChart(res);
-  if (res._tool === "hotspots") {
-    html += `<div class="section"><h3>Top ${res.hotspots.length} hotspots · ${fmtM(res.cell_m)} cells</h3>${res.hotspots.length ? `<ul class="changes">${res.hotspots.map((h, i) => `<li data-lat="${h.lat}" data-lon="${h.lon}" style="cursor:pointer"><b>#${i + 1}</b> · ${h.count.toLocaleString()} observations<br><span class="desc mono">${h.lat.toFixed(4)}, ${h.lon.toFixed(4)}</span><br><span class="desc">${Object.entries(h.sources).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}</span></li>`).join("")}</ul>` : `<p class="desc">Nothing in this area and window.</p>`}</div>`;
-  }
-  if (res._tool === "history_before" && res.anchor) {
-    html += `<div class="section"><h3>Before ${esc(res.anchor.event_type)} of ${esc(res.entity_id)}</h3>
-      <ul class="changes">${res.timeline.map(t => `<li><span class="mono">T${t.offset_minutes >= 0 ? "+" : ""}${fmtNum(t.offset_minutes, 1)} min</span> · <b>${esc(t.event_type)}</b><br><span class="desc">${esc(t.source_id)} · confidence ${t.confidence.toFixed(2)}</span></li>`).join("")}
-      <li style="border:1px solid var(--danger)"><span class="mono">T 0</span> · <b>${esc(res.anchor.event_type)}</b><br><span class="desc">${esc(res.anchor.source_id)}</span></li></ul></div>`;
-  }
-  if (res._tool === "nearby_entities") {
-    html += `<div class="section"><h3>Near ${esc(res.entity_id)}</h3>${res.entities.length ? `<ul class="changes">${res.entities.map(e => `<li><b>${esc(e.entity_id)}</b> <span class="desc">· ${fmtM(Math.round(e.distance_m))} away</span></li>`).join("")}</ul>` : `<p class="desc">Nothing nearby in that window.</p>`}</div>`;
-  }
-  if (res._tool === "fused_location") {
-    html += `<div class="section"><h3>Fused estimate</h3><dl class="kv">
-      <dt>Location</dt><dd class="mono">${res.lat.toFixed(6)}, ${res.lon.toFixed(6)}</dd>
-      <dt>Uncertainty</dt><dd>± ${fmtNum(res.uncertainty_m, 1)} m</dd>
-      <dt>Confidence</dt><dd>${res.confidence.toFixed(3)}</dd>
-      <dt>Supporting</dt><dd>${res.support.length} observations</dd>
-      <dt>Outliers</dt><dd>${res.outliers.length ? `<span class="bad">${res.outliers.length} flagged</span> (kept, not deleted)` : "none"}</dd></dl></div>`;
-  }
-  if (obs.length) {
-    const out = new Set(res.outliers || []);
-    html += `<div class="section" style="padding-bottom:6px"><h3>Evidence (${obs.length})</h3></div><ul class="timeline">` +
-      obs.map(o => `<li data-id="${esc(o.observation_id)}"><span class="dot" style="background:${colorOf[o.event_type] || "#888"}"></span>
-        <div><div class="t-top"><span class="t-ev">${esc(o.event_type)}${out.has(o.observation_id) ? ' <span class="bad">outlier</span>' : ""}</span><span class="t-time">${fmtTime(o.timestamp)}</span></div>
-        <div>${esc(o.entity_id)}</div>
-        <div class="t-meta"><span>${esc(o.source_id)}</span><span class="conf"><i style="--w:${o.confidence * 100}%"></i>${o.confidence.toFixed(2)}</span>${o.uncertainty_m ? `<span>±${fmtNum(o.uncertainty_m, 0)} m</span>` : ""}</div></div></li>`).join("") + `</ul>`;
-  } else if (!["what_changed", "activity", "hotspots"].includes(res._tool)) {
-    html += `<div class="empty">No observations matched.</div>`;
-  }
-  el.innerHTML = html;
-  $$("#results .timeline li").forEach(li => li.onclick = () => openEvidence(li.dataset.id));
-  $$("#results li[data-lat]").forEach(li => li.onclick = () => map?.easeTo({center: [+li.dataset.lon, +li.dataset.lat], zoom: 16}));
+  return "";
 }
-
-function activityChart(res) {
-  const b = res.buckets, W = 340, H = 150, P = {l: 34, r: 6, t: 8, b: 22};
-  const groups = res.groups ? Object.entries(res.groups) : [["all", b.map(x => x.count)]];
-  const max = Math.max(1, ...b.map(x => x.count));
-  const bw = (W - P.l - P.r) / b.length;
+function facts(r) {
+  const o = r.observations || [];
+  const items = [];
+  if (r._tool === "fused_location") items.push([`±${num(r.uncertainty_m, 1)} m`, "accuracy"], [pct(r.confidence), "confidence"], [r.outliers.length, "outliers"]);
+  else if (r._tool === "activity" || r._tool === "hotspots") items.push([num(r.count), "observations"], [r.sources?.length ?? "–", "sources"], [`${Math.round(r._ms)} ms`, "answer time"]);
+  else items.push([num(r.count ?? o.length), "observations"], [(r.sources || [...new Set(o.map(x => x.source_id))]).length, "sources"], [`${Math.round(r._ms)} ms`, "answer time"]);
+  return `<div class="facts">${items.map(([v, l]) => `<div class="fact"><b>${v}</b><span>${l}</span></div>`).join("")}</div>`;
+}
+function renderAnswer(r) {
+  let h = `<button class="back" data-home>← All questions</button><div class="q">${esc(lastQ)}</div>`;
+  if (!r.ok) {
+    h += `<div class="err">${esc(r.error)}</div>`;
+  } else {
+    h += `<p class="headline">${headline(r)}</p>${facts(r)}`;
+    if (r._tool === "history_before" && r.anchor) {
+      h += `<div class="section-title">Timeline</div><ul class="steps">` +
+        r.timeline.map(t => `<li style="--c:${colorOf[t.event_type] || "#888"}"><i></i><span class="when">${Math.round(t.offset_minutes)} min</span><b>${esc(human(t.event_type))}</b><small>${esc(t.source_id)} · ${pct(t.confidence)} sure</small></li>`).join("") +
+        `<li style="--c:var(--bad)"><i></i><span class="when">0 min · ${nice(r.anchor.timestamp)}</span><b>${esc(human(r.anchor.event_type))}</b><small>${esc(r.anchor.source_id)}</small></li></ul>`;
+    }
+    if (r._tool === "what_changed" && (r.appeared.length || r.changed.length)) {
+      h += `<div class="section-title">Changes</div><ul class="ev">` +
+        r.appeared.map(e => `<li style="cursor:default"><span class="dot" style="background:var(--good)"></span><div><b>${esc(e)}</b><small>appeared</small></div><span class="tag good">new</span></li>`).join("") +
+        r.changed.map(c => `<li style="cursor:default"><span class="dot" style="background:var(--warn)"></span><div><b>${esc(c.entity_id)}</b><small>${esc(human(c.from))} → ${esc(human(c.to))}${c.moved_m > 1 ? ` · moved ${fmtM(c.moved_m)}` : ""}</small></div></li>`).join("") + `</ul>`;
+    }
+    if (r._tool === "activity") h += `<div class="section-title">Over time (UTC)</div><div class="box">${chart(r)}</div>`;
+    if (r._tool === "hotspots" && r.hotspots.length) {
+      h += `<div class="section-title">Busiest spots</div><ul class="ev">` + r.hotspots.map((s, i) =>
+        `<li data-lat="${s.lat}" data-lon="${s.lon}"><span class="dot" style="background:#f472b6"></span><div><b>#${i + 1} · ${num(s.count)} observations</b><small>${Object.entries(s.sources).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}</small></div><span class="muted">›</span></li>`).join("") + `</ul>`;
+    }
+    if (r._tool === "nearby_entities" && r.entities.length) {
+      h += `<div class="section-title">Nearby</div><ul class="ev">` + r.entities.map(e => `<li style="cursor:default"><span class="dot" style="background:var(--accent)"></span><div><b>${esc(e.entity_id)}</b><small>${fmtM(e.distance_m)} away</small></div></li>`).join("") + `</ul>`;
+    }
+    const obs = r.observations || [];
+    if (obs.length) {
+      const out = new Set(r.outliers || []);
+      h += `<div class="section-title">Evidence · ${plural(obs.length, "record")}${r.truncated ? " (first shown)" : ""}</div><ul class="ev">` +
+        obs.slice(0, 200).map(o => `<li data-id="${esc(o.observation_id)}"><span class="dot" style="background:${colorOf[o.event_type] || "#888"}"></span>
+          <div><b>${esc(human(o.event_type))}</b> ${out.has(o.observation_id) ? '<span class="tag bad">outlier</span>' : ""}<small>${esc(o.entity_id)} · ${esc(o.source_id)} · ${nice(o.timestamp)}</small></div>
+          <span class="conf"><span class="bar"><div style="width:${o.confidence * 100}%"></div></span>${pct(o.confidence)}</span></li>`).join("") + `</ul>`;
+    }
+  }
+  h += `<button class="ghost" data-home>Ask another question</button>`;
+  $("#answer").innerHTML = h;
+  $$("#answer [data-home]").forEach(b => b.onclick = () => { show("home"); clearResult(); });
+  $$("#answer li[data-id]").forEach(li => li.onclick = () => openEvidence(li.dataset.id));
+  $$("#answer li[data-lat]").forEach(li => li.onclick = () => map?.easeTo({center: [+li.dataset.lon, +li.dataset.lat], zoom: 16}));
+}
+function chart(r) {
+  const b = r.buckets, W = 360, H = 160, P = {l: 30, r: 4, t: 8, b: 20};
+  const groups = r.groups ? Object.entries(r.groups) : [["all", b.map(x => x.count)]];
+  const max = Math.max(1, ...b.map(x => x.count)), bw = (W - P.l - P.r) / b.length;
   const y = v => P.t + (H - P.t - P.b) * (1 - v / max);
-  const gcol = (i) => res.groups ? PALETTE[i % PALETTE.length] : "var(--accent)";
+  const col = i => r.groups ? PALETTE[i % PALETTE.length] : "url(#g)";
   let bars = "";
-  b.forEach((_, i) => {
-    let acc = 0;
-    groups.forEach(([, arr], gi) => {
-      const v = arr[i]; if (!v) return;
-      bars += `<rect x="${(P.l + i * bw).toFixed(2)}" y="${y(acc + v).toFixed(2)}" width="${Math.max(0.6, bw - 0.6).toFixed(2)}" height="${(y(acc) - y(acc + v)).toFixed(2)}" fill="${gcol(gi)}"><title>${esc(b[i].start.slice(0, 16).replace("T", " "))} UTC · ${v}</title></rect>`;
-      acc += v;
-    });
-  });
-  const ticks = [0, 0.5, 1].map(f => `<text x="${P.l - 4}" y="${y(max * f) + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${Math.round(max * f)}</text><line x1="${P.l}" x2="${W - P.r}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="var(--line)"/>`).join("");
-  const days = [];
-  b.forEach((x, i) => { if (i === 0 || x.start.slice(0, 10) !== b[i - 1].start.slice(0, 10)) days.push(i); });
-  const step = Math.max(1, Math.ceil(days.length / 7));
-  const xl = (days.length > 1 ? days.filter((_, k) => k % step === 0) : [0, Math.floor(b.length / 2)]).map(i => `<text x="${P.l + i * bw}" y="${H - 6}" font-size="9" fill="var(--muted)">${days.length > 1 ? b[i].start.slice(5, 10) : b[i].start.slice(11, 16)}</text>`).join("");
-  const peak = b.reduce((m, x) => x.count > m.count ? x : m, b[0]);
-  const legend = res.groups ? `<div class="legend" style="grid-template-columns:1fr 1fr;margin-top:8px">${groups.map(([k, arr], gi) => `<div><span class="dot" style="background:${gcol(gi)}"></span>${esc(k)} · ${arr.reduce((a, c) => a + c, 0).toLocaleString()}</div>`).join("")}</div>` : "";
-  return `<div class="section"><h3>Activity · ${fmtNum(res.bucket_minutes, 0)} min buckets (UTC)</h3>
-    <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Activity over time">${ticks}${bars}${xl}</svg>
-    <p class="desc" style="margin:6px 0 0">Peak ${peak.count.toLocaleString()} at ${esc(peak.start.slice(0, 16).replace("T", " "))} UTC</p>${legend}</div>`;
+  b.forEach((_, i) => { let acc = 0; groups.forEach(([, a], gi) => { const v = a[i]; if (!v) return;
+    bars += `<rect x="${(P.l + i * bw).toFixed(2)}" y="${y(acc + v).toFixed(2)}" width="${Math.max(.8, bw - .8).toFixed(2)}" height="${(y(acc) - y(acc + v)).toFixed(2)}" rx="1" fill="${col(gi)}"><title>${nice(b[i].start)} · ${v}</title></rect>`; acc += v; }); });
+  const grid = [0, .5, 1].map(f => `<line x1="${P.l}" x2="${W - P.r}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="var(--line)"/><text x="${P.l - 5}" y="${y(max * f) + 3}" text-anchor="end" font-size="9" fill="var(--faint)">${Math.round(max * f)}</text>`).join("");
+  const days = []; b.forEach((x, i) => { if (!i || x.start.slice(0, 10) !== b[i - 1].start.slice(0, 10)) days.push(i); });
+  const step = Math.max(1, Math.ceil(days.length / 6));
+  const xl = days.filter((_, k) => k % step === 0).map(i => `<text x="${P.l + i * bw}" y="${H - 5}" font-size="9" fill="var(--faint)">${MONTHS[new Date(b[i].start).getUTCMonth()]} ${new Date(b[i].start).getUTCDate()}</text>`).join("");
+  const legend = r.groups ? `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:12px">${groups.map(([k, a], gi) => `<span style="display:flex;align-items:center;gap:6px"><span class="dot" style="background:${col(gi)}"></span>${esc(k)} · ${num(a.reduce((x, y) => x + y, 0))}</span>`).join("")}</div>` : "";
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Activity over time"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9b7bff"/><stop offset="1" stop-color="#6d8bff"/></linearGradient></defs>${grid}${bars}${xl}</svg>${legend}`;
 }
 
+/* ---------- evidence drawer ---------- */
 async function openEvidence(id) {
-  const r = await api("/tools/evidence", {observation_id: id});
-  const d = $("#drawer");
-  if (!r.ok) { d.innerHTML = `<div class="section"><div class="err">${esc(r.error)}</div></div>`; d.classList.add("on"); return; }
+  const r = await api("/tools/evidence", {observation_id: id}), d = $("#drawer");
+  if (!r.ok) { d.innerHTML = `<div class="pad"><div class="err">${esc(r.error)}</div></div>`; d.classList.add("on"); return; }
   const o = r.observation;
-  d.innerHTML = `<div class="section" style="display:flex;justify-content:space-between;align-items:center">
-      <h3 style="margin:0">Evidence</h3><button class="icon-btn" id="closeDrawer" aria-label="Close">✕</button></div>
-    <div class="section"><div class="t-ev" style="font-size:16px">${esc(o.event_type)}</div><div>${esc(o.entity_id)}</div>
-      <dl class="kv"><dt>Observation</dt><dd class="mono">${esc(o.observation_id)}</dd>
-      <dt>When</dt><dd>${esc(o.timestamp)}</dd><dt>Where</dt><dd class="mono">${o.lat.toFixed(6)}, ${o.lon.toFixed(6)} ±${fmtNum(o.uncertainty_m, 1)} m</dd>
-      <dt>Source</dt><dd>${esc(o.source_id)}</dd><dt>Model</dt><dd>${esc(o.processing_model || "–")}</dd>
-      <dt>Confidence</dt><dd>${o.confidence.toFixed(3)}</dd></dl></div>
-    <div class="section"><h3>Provenance chain</h3>
-      ${r.lineage.length > 1 ? "" : `<p class="desc">No parent observations.</p>`}
-      <ul class="lineage">${r.lineage.map(x => `<li><b>${esc(x.event_type)}</b> <span class="t-time">${fmtTime(x.timestamp)}</span><br><span class="desc">${esc(x.source_id)} · ${x.confidence.toFixed(2)}</span></li>`).join("")}</ul></div>`;
+  d.innerHTML = `<div class="pad"><div style="display:flex;justify-content:space-between;align-items:center"><span class="badge">Evidence</span><button class="icon-btn" id="dclose" aria-label="Close">✕</button></div>
+    <h2 style="margin:12px 0 2px;font-size:20px">${esc(human(o.event_type))}</h2><div class="muted">${esc(o.entity_id)}</div>
+    <div class="section-title">Where this came from</div>
+    <dl class="kv"><dt>Source</dt><dd><b>${esc(o.source_id)}</b></dd><dt>Model</dt><dd>${esc(o.processing_model || "–")}</dd>
+    <dt>When</dt><dd>${nice(o.timestamp)} UTC</dd><dt>Where</dt><dd class="mono">${o.lat.toFixed(5)}, ${o.lon.toFixed(5)}</dd>
+    <dt>Accuracy</dt><dd>± ${num(o.uncertainty_m, 1)} m</dd><dt>Confidence</dt><dd><span class="conf"><span class="bar"><div style="width:${o.confidence * 100}%"></div></span>${pct(o.confidence)}</span></dd>
+    <dt>Record id</dt><dd class="mono">${esc(o.observation_id)}</dd></dl>
+    <div class="section-title">Chain of evidence</div>
+    ${r.lineage.length > 1 ? `<p class="muted" style="margin-top:0">This record was derived from earlier ones, newest first:</p>` : `<p class="muted" style="margin-top:0">This is an original report; nothing earlier led to it.</p>`}
+    <ul class="steps">${r.lineage.map(x => `<li style="--c:${colorOf[x.event_type] || "#888"}"><i></i><span class="when">${nice(x.timestamp)}</span><b>${esc(human(x.event_type))}</b><small>${esc(x.source_id)} · ${pct(x.confidence)} sure</small></li>`).join("")}</ul></div>`;
   d.classList.add("on");
-  $("#closeDrawer").onclick = () => d.classList.remove("on");
-  $$("#results .timeline li").forEach(li => li.classList.toggle("sel", li.dataset.id === id));
-  if (map) map.easeTo({center: [o.lon, o.lat], zoom: Math.max(map.getZoom(), 15)});
+  $("#dclose").onclick = () => d.classList.remove("on");
+  $$("#answer li[data-id]").forEach(li => li.classList.toggle("sel", li.dataset.id === id));
+  map?.easeTo({center: [o.lon, o.lat], zoom: Math.max(map.getZoom(), 15)});
 }
 document.addEventListener("keydown", e => e.key === "Escape" && $("#drawer").classList.remove("on"));
 
 /* ---------- scenarios ---------- */
-const UBER = {
-  ts() { area("activity", 40.7580, -73.9855, 250, "2014-07-07T04:00", "2014-07-14T04:00");
-         $("#bucket").value = 60; $("#groupBy").value = ""; run(); },
-  // 2014 Macy's fireworks were on the East River by the Brooklyn Bridge.
-  july4() { area("activity", 40.6960, -73.9950, 800, "2014-07-04T20:00", "2014-07-05T08:00");
-            $("#bucket").value = 30; $("#groupBy").value = ""; run(); },
-  normal() { area("activity", 40.6960, -73.9950, 800, "2014-07-11T20:00", "2014-07-12T08:00");
-             $("#bucket").value = 30; $("#groupBy").value = ""; run(); },
-  jfk() { area("activity", 40.6446, -73.7797, 2500, "2014-09-12T04:00", "2014-09-15T04:00");
-          $("#bucket").value = 60; $("#groupBy").value = "source_id"; run(); },
-  sat() { area("hotspots", 40.730, -73.950, 15000, "2014-09-14T02:00", "2014-09-14T06:00");
-          $("#cell").value = 300; $("#top").value = 20; run(); },
-};
-function area(tool, lat, lon, r, s, e) {
-  setMode("area"); setTool("areaTool", tool); setCenter(lat, lon); setRadius(r);
-  $("#start").value = s; $("#end").value = e;
+function scenarios() {
+  const end = nowIso();
+  if (ov?.dataset === "uber") return [
+    {ic: "🗽", t: "Times Square's weekly rhythm", s: "How busy is one Manhattan block, hour by hour?", run: () => ask("activity",
+      {lat: 40.7580, lon: -73.9855, radius_m: 250, start: "2014-07-07T04:00:00Z", end: "2014-07-14T04:00:00Z", bucket_minutes: 60}, "How busy was Times Square during one week in July 2014?")},
+    {ic: "🎆", t: "July 4th fireworks", s: "Did pickups surge near the fireworks?", run: () => ask("activity",
+      {lat: 40.6960, lon: -73.9950, radius_m: 800, start: "2014-07-04T20:00:00Z", end: "2014-07-05T08:00:00Z", bucket_minutes: 30}, "What happened near the Brooklyn Bridge fireworks on July 4th?")},
+    {ic: "✈️", t: "JFK by dispatch base", s: "Which of the 5 sources reported airport pickups?", run: () => ask("activity",
+      {lat: 40.6446, lon: -73.7797, radius_m: 2500, start: "2014-09-12T04:00:00Z", end: "2014-09-15T04:00:00Z", bucket_minutes: 60, group_by: "source_id"}, "Who picked people up at JFK over a weekend?")},
+    {ic: "🌃", t: "Saturday night hotspots", s: "Where was the city busiest at night?", run: () => ask("hotspots",
+      {lat: 40.73, lon: -73.95, radius_m: 15000, start: "2014-09-14T02:00:00Z", end: "2014-09-14T06:00:00Z", cell_m: 300, top: 15}, "Where were the busiest pickup spots on a Saturday night?")},
+  ];
+  return [
+    {ic: "⚙️", t: "Why did Machine 47 fail?", s: "See the warning signs that came before the breakdown.", run: () => ask("history_before",
+      {entity_id: "Machine_47", event_type: "failure", lookback_minutes: 60}, "Why did Machine 47 fail?")},
+    {ic: "🌊", t: "Where exactly is the flood?", s: "4 sources disagree. Who should we trust?", run: () => ask("fused_location",
+      {entity_id: "Flood_Event_1", start: shift(end, -24 * 7), end}, "Where exactly is the flood?")},
+    {ic: "☀️", t: "What changed at the solar farm?", s: "Which panels got worse over the last 6 weeks?", run: () => ask("what_changed",
+      {lat: 10.9618, lon: 77.0518, radius_m: 600, start: shift(end, -24 * 45), end, limit: 500}, "What changed at the solar farm in the last 6 weeks?")},
+    {ic: "🏭", t: "The factory, last 24 hours", s: "Every reading and alert, with its source.", run: () => ask("events_near",
+      {lat: 11.0172, lon: 76.9566, radius_m: 300, start: shift(end, -24), end, limit: 500}, "What happened at the factory in the last 24 hours?")},
+  ];
 }
-const SCEN = {
-  m47() { setMode("entity"); setTool("entityTool", "history_before");
-          $("#entity").value = "Machine_47"; $("#anchor").value = "failure"; $("#lookback").value = 60; run(); },
-  flood() { setMode("fuse"); $("#fentity").value = "Flood_Event_1";
-            $("#fstart").value = toLocal(shift(nowIso(), -24 * 7)); $("#fend").value = toLocal(nowIso()); run(); },
-  solar() { setMode("area"); setTool("areaTool", "what_changed"); setCenter(10.9618, 77.0518); setRadius(600);
-            $("#start").value = toLocal(shift(nowIso(), -24 * 45)); $("#end").value = toLocal(nowIso()); run(); },
-  factory() { setMode("area"); setTool("areaTool", "events_near"); setCenter(11.0172, 76.9566); setRadius(300);
-              $("#etype").value = ""; $("#minconf").value = 0; syncOutputs();
-              $("#start").value = toLocal(shift(nowIso(), -24)); $("#end").value = toLocal(nowIso()); run(); },
-};
-function wireScenarios() {
-  if (overview?.dataset === "uber") {
-    $("#scenarios").innerHTML = [["ts", "Times Square: a week"], ["july4", "July 4th: Brooklyn Heights"],
-      ["normal", "…same place, normal Friday"], ["jfk", "JFK by dispatch base"], ["sat", "Saturday night hotspots"]]
-      .map(([k, l]) => `<span class="chip" data-s="${k}">${l}</span>`).join("") +
-      `<p class="desc" style="margin:10px 0 0">Real NYC Uber pickups (TLC, 2014). Times are UTC; New York is UTC−4 in summer.</p>`;
-  }
-  const table = overview?.dataset === "uber" ? UBER : SCEN;
-  $$("#scenarios .chip").forEach(c => c.onclick = () => table[c.dataset.s]());
+function renderScenarios() {
+  const list = scenarios();
+  $("#scenarios").innerHTML = list.map((x, i) => `<button class="qcard" data-i="${i}"><span class="ic">${x.ic}</span><span><b>${esc(x.t)}</b><small>${esc(x.s)}</small></span><span class="go">›</span></button>`).join("");
+  $$("#scenarios .qcard").forEach(b => b.onclick = () => list[+b.dataset.i].run());
 }
 
 /* ---------- benchmarks ---------- */
-let benchLoaded = false;
+let benchDone = false;
 async function loadBench() {
-  if (benchLoaded) return;
-  let r;
-  try { r = await api("/api/results"); } catch { r = {runs: {}}; }
-  const runs = r.runs || {};
-  const order = k => ({tiny: 0, S: 1, M: 2}[k.split(" ")[0]] ?? 9) + (k.includes("·") ? 0.5 : 0);
-  const scales = Object.keys(runs).sort((a, b) => order(a) - order(b) || a.localeCompare(b));
-  if (!scales.length) { $("#benchBody").innerHTML = `<div class="empty">No benchmark results yet.<br>Run <span class="mono">python -m geomemory.bench --scale S</span></div>`; return; }
-  benchLoaded = true;
-  const pick = scales.includes("M") ? "M" : scales[scales.length - 1];
-  $("#benchBody").innerHTML = `<div class="bench-head"><h2>Benchmark results</h2>
-    <div class="seg" id="scaleSeg" style="grid-template-columns:repeat(${scales.length},auto);margin:0">${scales.map(s => `<button data-s="${esc(s)}">${esc(s)}</button>`).join("")}</div>
-    <span class="desc" id="benchMeta" style="margin:0"></span></div><div id="benchCards"></div>`;
-  $$("#scaleSeg button").forEach(b => b.onclick = () => { $$("#scaleSeg button").forEach(x => x.classList.toggle("on", x === b)); renderBench(runs[b.dataset.s]); });
-  $$("#scaleSeg button").find(b => b.dataset.s === pick).click();
+  if (benchDone) return;
+  $("#benchBody").innerHTML = `<div class="loading"><div class="spin"></div>Loading results…</div>`;
+  let r; try { r = await api("/api/results"); } catch { r = {runs: {}}; }
+  const runs = r.runs || {}, keys = Object.keys(runs);
+  if (!keys.length) { $("#benchBody").innerHTML = `<p class="muted">No benchmark results yet.</p>`; return; }
+  benchDone = true;
+  const pick = keys.find(k => k.includes("uber")) || keys[0];
+  $("#benchBody").innerHTML = `<div class="bh"><span class="badge">Measured, not estimated</span><h2 style="margin-top:10px">How well does it work?</h2>
+    <p class="muted" style="margin:0">Every number below was measured, and every answer was checked against a brute-force scan.</p></div>
+    <div class="seg" id="runSeg" style="max-width:420px">${keys.map(k => `<button data-k="${esc(k)}">${esc(k.includes("uber") ? "1M real Uber pickups" : k === "S" ? "100K synthetic" : k)}</button>`).join("")}</div><div id="benchCards"></div>`;
+  $$("#runSeg button").forEach(b => b.onclick = () => { $$("#runSeg button").forEach(x => x.classList.toggle("on", x === b)); renderBench(runs[b.dataset.k]); });
+  $$("#runSeg button").find(b => b.dataset.k === pick).click();
 }
-function table(cols, rows) {
-  return `<div class="tablewrap"><table><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${esc(c.h)}</th>`).join("")}</tr></thead><tbody>${
-    rows.map(r => `<tr>${cols.map(c => { const v = c.f(r); return `<td class="${c.n ? "n" : ""}">${typeof v === "boolean" ? (v ? '<span class="good">✓</span>' : '<span class="bad">✗ wrong</span>') : v}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>`;
-}
-function bars(items, unit, d = 2, lowerBetter = true) {
-  const max = Math.max(...items.map(i => i.v)) || 1;
-  return `<div class="bars">${items.map(i => `<div class="bar"><span>${esc(i.k)}</span><div class="track"><div class="fill" style="width:${Math.max(1, i.v / max * 100)}%"></div></div><span class="val">${fmtNum(i.v, d)}${unit}</span></div>`).join("")}</div>`;
-}
+const tbl = (cols, rows) => `<div class="tw"><table><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${esc(c.h)}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${cols.map(c => { const v = c.f(r); return `<td class="${c.n ? "n" : ""}">${v === true ? '<span class="tag good">✓ correct</span>' : v === false ? '<span class="tag bad">wrong</span>' : v}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>`;
+const bars = (items, unit = "", d = 2) => { const m = Math.max(...items.map(i => i.v)) || 1;
+  return `<div class="bars">${items.map(i => `<div class="brow"><span>${esc(i.k)}</span><div class="track"><div class="fill" style="width:${Math.max(1.5, i.v / m * 100)}%"></div></div><span class="val">${num(i.v, d)}${unit}</span></div>`).join("")}</div>`; };
 function renderBench(run) {
   const e = run.experiments, out = [];
-  $("#benchMeta").textContent = `${run.dataset && run.dataset !== "synthetic" ? "real data: " + run.dataset + " · " : ""}seed ${run.seed} · Python ${run.python} · ${run.started}`;
-  const card = (t, q, body) => `<div class="card"><h3>${t}</h3><p class="q">${q}</p>${body}</div>`;
-  if (e.E1) out.push(card("E1 · Dataset scaling", "How does performance change with data volume?", table([
-    {h: "Observations", n: 1, f: r => fmtNum(r.n, 0)}, {h: "Ingest / s", n: 1, f: r => fmtNum(r.ingest_per_s, 0)},
-    {h: `Radius ${fmtM(e.E1.rows[0].radius_m || 2000)} p50 ms`, n: 1, f: r => fmtNum(r.radius_2km.p50_ms, 3)}, {h: "p95 ms", n: 1, f: r => fmtNum(r.radius_2km.p95_ms, 3)},
-    {h: "Place + time p50 ms", n: 1, f: r => fmtNum(r.spatiotemporal.p50_ms, 3)},
-    {h: "Bytes / obs", n: 1, f: r => fmtNum(r.bytes_per_obs, 0)}, {h: "Correct", f: r => r.correct}], e.E1.rows)));
-  if (e.E2) out.push(card(`E2 · Spatial index comparison (${fmtNum(e.E2.n, 0)} obs)`, "Which index is fastest for which query? Lower is better.",
-    `<div class="grid2"><div><h3 style="font-size:13px">Radius ${fmtM((e.E2.radii_m || [500])[0])}, p50 ms</h3>${bars(e.E2.rows.map(r => ({k: r.index, v: r.radius_500m.p50_ms})), "", 3)}</div>
-     <div><h3 style="font-size:13px">10 nearest, p50 ms</h3>${bars(e.E2.rows.map(r => ({k: r.index, v: r.knn_10.p50_ms})), "", 3)}</div></div><br>` +
-    table([{h: "Index", f: r => esc(r.index)}, {h: "Build s", n: 1, f: r => fmtNum(r.build_s)}, {h: "Index MB", n: 1, f: r => fmtNum(r.index_memory_mb, 1)},
-      {h: `Radius ${fmtM((e.E2.radii_m || [0, 50000])[1])} p50`, n: 1, f: r => fmtNum(r.radius_50km.p50_ms, 2)}, {h: "Polygon p50", n: 1, f: r => fmtNum(r.polygon.p50_ms, 2)},
-      {h: "Correct", f: r => r.correct}], e.E2.rows)));
-  if (e.E3) {
-    const real = e.E3.rows[0]?.wall_s != null;
-    out.push(card(real ? `E3 · Distributed scaling, real processes (${e.E3.cpus} CPU cores)` : "E3 · Distributed scaling (modeled)",
-      real ? `${fmtNum(e.E3.queries, 0)} radius queries over ${fmtNum(e.E3.n, 0)} observations. Ideal speedup equals the worker count.` : "Modeled from per-partition timings.",
-      `<div class="grid2"><div><h3 style="font-size:13px">Speedup (×)</h3>${bars(e.E3.rows.map(r => ({k: `${r.workers} worker${r.workers > 1 ? "s" : ""}`, v: r.speedup})), "×")}</div>
-       <div><h3 style="font-size:13px">Efficiency</h3>${bars(e.E3.rows.map(r => ({k: `${r.workers} worker${r.workers > 1 ? "s" : ""}`, v: r.efficiency * 100})), "%", 0)}</div></div><br>` +
-      table(real ? [{h: "Workers", n: 1, f: r => r.workers}, {h: "Wall s", n: 1, f: r => fmtNum(r.wall_s, 3)}, {h: "Queries / s", n: 1, f: r => fmtNum(r.queries_per_s, 0)},
-        {h: "Speedup", n: 1, f: r => fmtNum(r.speedup)}, {h: "Efficiency", n: 1, f: r => fmtNum(r.efficiency)}, {h: "Ingest / s", n: 1, f: r => fmtNum(r.ingest_per_s, 0)}, {h: "Correct", f: r => r.correct}]
-        : [{h: "Workers", n: 1, f: r => r.workers}, {h: "Speedup", n: 1, f: r => fmtNum(r.speedup)}, {h: "Partitions touched", n: 1, f: r => fmtNum(r.partitions_touched)}, {h: "Correct", f: r => r.correct}], e.E3.rows)));
-  }
-  if (e.E4) out.push(card("E4 · Streaming throughput", "Can it keep up while answering queries at the same time?", table([
-    {h: "Offered / s", n: 1, f: r => fmtNum(r.offered_rate, 0)}, {h: "Achieved / s", n: 1, f: r => fmtNum(r.achieved_ingest_per_s, 0)},
-    {h: "Dropped", n: 1, f: r => fmtNum(r.dropped, 0)}, {h: "Max backlog", n: 1, f: r => fmtNum(r.max_backlog, 0)},
-    {h: "E2E p99 ms", n: 1, f: r => fmtNum(r.e2e_p99_ms)}, {h: "Query p50 under load", n: 1, f: r => fmtNum(r.query_under_load.p50_ms, 3)},
-    {h: "Correct", f: r => r.correct}], e.E4.rows)));
-  if (e.E5) out.push(card("E5 · Spatial skew", "Does partitioning stay balanced when data clusters in hotspots? 1.0 = perfectly balanced.",
-    bars(e.E5.rows.map(r => ({k: `${r.distribution} · ${r.partitioner.replace(" (adaptive)", "")}`, v: r.imbalance_max_over_mean})), "×") + "<br>" +
-    table([{h: "Data", f: r => esc(r.distribution)}, {h: "Partitioner", f: r => esc(r.partitioner)},
-      {h: "Imbalance", n: 1, f: r => fmtNum(r.imbalance_max_over_mean)}, {h: "Largest", n: 1, f: r => fmtNum(r.largest_partition, 0)},
-      {h: "Smallest", n: 1, f: r => fmtNum(r.smallest_partition, 0)}, {h: "Hotspot query partitions", n: 1, f: r => fmtNum(r.hotspot_query_partitions, 1)}], e.E5.rows)));
-  if (e.E6) out.push(card("E6 · Agent retrieval", `Does place-and-time retrieval give agents better context than keyword search? (${e.E6.queries} queries)`,
-    table([{h: "Method", f: r => esc(r.method)}, {h: "Precision", n: 1, f: r => fmtNum(r.precision, 4)},
-      {h: "Recall", n: 1, f: r => fmtNum(r.recall, 4)}, {h: "Latency p50 ms", n: 1, f: r => r.latency ? fmtNum(r.latency.p50_ms, 2) : "–"}], e.E6.rows)));
-  if (e.E7?.rows?.length) {
-    const [a, b] = e.E7.radii_m;
-    out.push(card(`E7 · In-memory engine vs PostGIS (${fmtNum(e.E7.n, 0)} obs)`,
-      "Same data and queries on both; answers are cross-checked. Lower latency is better.",
-      `<div class="grid2"><div><h3 style="font-size:13px">Radius ${fmtM(a)}, p50 ms</h3>${bars(e.E7.rows.map(r => ({k: r.backend.split(" (")[0], v: r.radius_small.p50_ms})), "", 3)}</div>
-       <div><h3 style="font-size:13px">Place + time, p50 ms</h3>${bars(e.E7.rows.map(r => ({k: r.backend.split(" (")[0], v: r.place_time.p50_ms})), "", 3)}</div></div><br>` +
-      table([{h: "Backend", f: r => esc(r.backend)}, {h: "Ingest / s", n: 1, f: r => fmtNum(r.ingest_per_s, 0)},
-        {h: "Storage MB", n: 1, f: r => fmtNum(r.storage_mb, 1)}, {h: `Radius ${fmtM(b)} p50`, n: 1, f: r => fmtNum(r.radius_large.p50_ms, 2)},
-        {h: "10-NN p50", n: 1, f: r => fmtNum(r.knn_10.p50_ms, 3)}, {h: "Polygon p50", n: 1, f: r => fmtNum(r.polygon.p50_ms, 2)},
-        {h: "Agree", f: r => r.correct}], e.E7.rows)));
-  }
+  const k = [];
+  const big = e.E1?.rows?.at(-1);
+  if (big) k.push([num(big.n), "records searched", "real NYC Uber pickups"]);
+  if (e.E3?.rows?.[0]?.wall_s != null) { const r4 = e.E3.rows.find(r => r.workers === 4) || e.E3.rows.at(-1); k.push([`${num(r4.speedup, 2)}×`, `faster with ${r4.workers} workers`, `${pct(r4.efficiency)} parallel efficiency`]); }
+  if (e.E6) k.push([pct(e.E6.rows[0].precision), "of answers relevant", `keyword search: ${(e.E6.rows[1].precision * 100).toFixed(1)}%`]);
+  if (e.E5) { const kd = e.E5.rows.find(r => r.partitioner.startsWith("KD") && r.distribution !== "uniform"), gr = e.E5.rows.find(r => r.partitioner.startsWith("Grid") && r.distribution !== "uniform");
+    if (kd && gr) k.push([`${num(gr.imbalance_max_over_mean, 1)}× → ${num(kd.imbalance_max_over_mean, 2)}×`, "load imbalance fixed", "fixed grid vs adaptive split"]); }
+  if (e.E4) { const r = e.E4.rows.at(-1); k.push([num(r.achieved_ingest_per_s), "events / second", `${num(r.dropped)} dropped while answering queries`]); }
+  if (e.E2) { const q = e.E2.rows.find(r => r.index === "QuadTree"), s = e.E2.rows.find(r => r.index.startsWith("Scan"));
+    if (q && s) k.push([`${num(s.knn_10.p50_ms / q.knn_10.p50_ms)}×`, "faster nearest-neighbour search", "quadtree vs no index"]); }
+  out.push(`<div class="kpis">${k.map(([v, l, s]) => `<div class="kpi"><b>${v}</b><span>${l}</span><small>${s}</small></div>`).join("")}</div>`);
+  const card = (t, q, take, body) => `<div class="card"><h3>${t}</h3><p class="qq">${q}</p>${take ? `<div class="takeaway">💡 ${take}</div>` : ""}${body}</div>`;
+  if (e.E2) { const [a, b] = e.E2.radii_m || [500, 50000];
+    out.push(card("Which search index is fastest?", `${num(e.E2.n)} records. Shorter bars are faster.`, "The adaptive quadtree wins on small and nearest-neighbour searches. When a search covers most of the data, scanning everything is just as good.",
+      `<div class="grid2"><div><h4>Search ${fmtM(a)} around a point (ms)</h4>${bars(e.E2.rows.map(r => ({k: r.index, v: r.radius_500m.p50_ms})), "", 2)}</div><div><h4>Find the 10 nearest (ms)</h4>${bars(e.E2.rows.map(r => ({k: r.index, v: r.knn_10.p50_ms})), "", 2)}</div></div>`)); }
+  if (e.E3) { const real = e.E3.rows[0]?.wall_s != null;
+    out.push(card(real ? `Does adding workers make it faster? (${e.E3.cpus} CPU cores)` : "Does adding workers make it faster? (modelled)", real ? `${num(e.E3.queries)} searches over ${num(e.E3.n)} records, each worker a separate process.` : "Modelled from per-partition timings.",
+      real ? "Near-perfect scaling up to the number of CPU cores. Beyond that, extra workers help little." : "",
+      `<div class="grid2"><div><h4>Speed-up</h4>${bars(e.E3.rows.map(r => ({k: `${r.workers} worker${r.workers > 1 ? "s" : ""}`, v: r.speedup})), "×")}</div><div><h4>Efficiency</h4>${bars(e.E3.rows.map(r => ({k: `${r.workers} worker${r.workers > 1 ? "s" : ""}`, v: r.efficiency * 100})), "%", 0)}</div></div>`)); }
+  if (e.E5) out.push(card("Does it stay balanced when data clusters?", "1.0× means perfectly even work across 16 partitions.", "A fixed grid piles most of the data onto a few partitions. The adaptive split keeps every one about equal.",
+    bars(e.E5.rows.map(r => ({k: `${r.distribution} · ${r.partitioner.split(" ")[0]}`, v: r.imbalance_max_over_mean})), "×")));
+  if (e.E6) out.push(card("Do AI agents get the right context?", `${num(e.E6.queries)} location-and-time questions.`, "Searching by place and time returns exactly the relevant records. Keyword search returns mostly noise.",
+    tbl([{h: "Method", f: r => esc(r.method)}, {h: "Precision", n: 1, f: r => num(r.precision, 4)}, {h: "Recall", n: 1, f: r => num(r.recall, 4)}], e.E6.rows)));
+  if (e.E4) out.push(card("Can it keep up with a live stream?", "Real-time ingestion while answering queries at the same time.", "",
+    tbl([{h: "Offered / s", n: 1, f: r => num(r.offered_rate)}, {h: "Stored / s", n: 1, f: r => num(r.achieved_ingest_per_s)}, {h: "Dropped", n: 1, f: r => num(r.dropped)},
+         {h: "Delay p99", n: 1, f: r => `${num(r.e2e_p99_ms, 1)} ms`}, {h: "Search while busy", n: 1, f: r => `${num(r.query_under_load.p50_ms, 2)} ms`}, {h: "", f: r => r.correct}], e.E4.rows)));
+  if (e.E7?.rows?.length) out.push(card("How does it compare with PostGIS?", `Same ${num(e.E7.n)} records and queries on both. Answers were cross-checked.`, "Both give identical answers. PostGIS loads data faster; small searches are faster in memory.",
+    tbl([{h: "Engine", f: r => esc(r.backend)}, {h: "Load / s", n: 1, f: r => num(r.ingest_per_s)}, {h: "Small search", n: 1, f: r => `${num(r.radius_small.p50_ms, 1)} ms`},
+         {h: "10 nearest", n: 1, f: r => `${num(r.knn_10.p50_ms, 1)} ms`}, {h: "", f: r => r.correct}], e.E7.rows)));
+  if (e.E1) out.push(card("What happens as data grows?", "Search speed at 10K → 1M records.", "",
+    tbl([{h: "Records", n: 1, f: r => num(r.n)}, {h: "Load / s", n: 1, f: r => num(r.ingest_per_s)}, {h: "Area search", n: 1, f: r => `${num(r.radius_2km.p50_ms, 2)} ms`},
+         {h: "1-day window", n: 1, f: r => `${num(r.time_1day.p50_ms, 2)} ms`}, {h: "Place + time", n: 1, f: r => `${num(r.spatiotemporal.p50_ms, 2)} ms`}, {h: "", f: r => r.correct}], e.E1.rows)));
   $("#benchCards").innerHTML = out.join("");
 }
 
 /* ---------- boot ---------- */
 async function boot() {
-  const end = nowIso();
-  $("#lat").value = state.lat; $("#lon").value = state.lon;
-  syncOutputs();
-  try { overview = await api("/api/overview"); } catch { overview = null; }
-  if (overview?.ok) {
-    let k = 0;
-    overview.event_types.forEach(t => colorOf[t] = SEMANTIC[t] || PALETTE[k++ % PALETTE.length]);
-    $("#stats").innerHTML = `<span><b>${overview.count.toLocaleString()}</b> observations</span><span><b>${overview.entities.toLocaleString()}</b> entities</span><span><b>${overview.sources.length}</b> sources</span>`;
-    $("#legend").innerHTML = overview.event_types.map(t => `<div><span class="dot" style="background:${colorOf[t]}"></span>${esc(t)}</div>`).join("");
-    $("#etype").innerHTML = `<option value="">Any</option>` + overview.event_types.map(t => `<option>${esc(t)}</option>`).join("");
-    $("#entities").innerHTML = [...new Set(overview.observations.map(o => o.entity_id))].sort().map(e => `<option value="${esc(e)}">`).join("");
-  } else {
-    $("#stats").innerHTML = `<span class="bad">API unreachable</span>`;
+  try { ov = await api("/api/overview"); } catch { ov = null; }
+  if (!ov?.ok) {
+    $("#boot .inner").innerHTML = `<div class="logo" style="animation:none"></div><b style="color:var(--text)">Couldn't reach the GeoMemory server.</b><br>Please refresh in a moment.`;
+    return;
   }
-  const e2 = nowIso();
-  $("#end").value = toLocal(e2); $("#start").value = toLocal(shift(e2, -24 * 7));
-  $("#fend").value = toLocal(e2); $("#fstart").value = toLocal(shift(e2, -24 * 7));
-  $("#at").value = toLocal(shift(e2, -0.33));
-  if (overview?.ok && overview.dataset !== "synthetic" && overview.observations.length) {
-    const ob = overview.observations, mid = ob[Math.floor(ob.length / 2)];
-    const lats = ob.map(o => o.lat).sort((a, b) => a - b), lons = ob.map(o => o.lon).sort((a, b) => a - b);
-    setCenter(lats[lats.length >> 1], lons[lons.length >> 1]);
-    $("#entity").value = mid.entity_id; $("#fentity").value = mid.entity_id;
-  }
-  wireScenarios();
+  let k = 0; ov.event_types.forEach(t => colorOf[t] = SEMANTIC[t] || PALETTE[k++ % PALETTE.length]);
+  $("#stats").innerHTML = `<span class="pill"><b>${num(ov.count)}</b> records</span><span class="pill"><b>${num(ov.entities)}</b> things</span><span class="pill"><b>${ov.sources.length}</b> sources</span>`;
+  $("#dsBadge").innerHTML = `<i></i>${ov.dataset === "uber" ? "Live · 1.8M real NYC Uber pickups" : "Live demo · factory, solar farm & flood near Coimbatore"}`;
+  $("#legend").innerHTML = `<b style="color:var(--text);font-size:11px;letter-spacing:.06em;text-transform:uppercase">Event types</b>` + ov.event_types.map(t => `<div><span class="dot" style="background:${colorOf[t]}"></span>${esc(human(t))}</div>`).join("");
+  $("#etype").innerHTML = `<option value="">Any</option>` + ov.event_types.map(t => `<option value="${esc(t)}">${esc(human(t))}</option>`).join("");
+  $("#entities").innerHTML = ov.entity_names.map(e => `<option value="${esc(e)}">`).join("");
+  [st.lat, st.lon] = ov.center; setCenter(...ov.center); sync();
+  const e = nowIso();
+  $("#end").value = toLocal(e); $("#start").value = toLocal(shift(e, -24 * 7));
+  $("#fend").value = toLocal(e); $("#fstart").value = toLocal(shift(e, -24 * 7));
+  $("#at").value = toLocal(shift(e, -.33));
+  renderScenarios();
   initMap();
-  drawAll();
+  setTimeout(() => $("#boot").classList.add("hide"), 250);
 }
 boot();
 </script>
