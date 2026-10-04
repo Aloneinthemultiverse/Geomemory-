@@ -1,1 +1,81 @@
 :: loading settings :: url = jar:file:/usr/local/lib/python3.11/dist-packages/pyspark/jars/ivy-2.5.1.jar!/org/apache/ivy/core/settings/ivysettings.xml
+{
+  "rows_in": 4534327,
+  "valid": 4534327,
+  "invalid": 0,
+  "joined": 4534327,
+  "zones": 71424,
+  "cell_deg": 0.01,
+  "grid": {
+    "lat0": 39.64995,
+    "lon0": -74.93005000000001,
+    "rows": 248,
+    "cols": 288
+  },
+  "hourly_rows": 1326020,
+  "top_zones": [
+    {
+      "zone_id": 31775,
+      "pickups": 222857,
+      "zlat": 40.74995,
+      "zlon": -73.98005
+    },
+    {
+      "zone_id": 31774,
+      "pickups": 186280,
+      "zlat": 40.74995,
+      "zlon": -73.99005000000001
+    },
+    {
+      "zone_id": 30909,
+      "pickups": 186010,
+      "zlat": 40.71995,
+      "zlon": -74.00005
+    },
+    {
+      "zone_id": 32063,
+      "pickups": 167461,
+      "zlat": 40.759949999999996,
+      "zlon": -73.98005
+    },
+    {
+      "zone_id": 31196,
+      "pickups": 161249,
+      "zlat": 40.729949999999995,
+      "zlon": -74.01005
+    },
+    {
+      "zone_id": 31486,
+      "pickups": 159985,
+      "zlat": 40.73995,
+      "zlon": -73.99005000000001
+    },
+    {
+      "zone_id": 30908,
+      "pickups": 158062,
+      "zlat": 40.71995,
+      "zlon": -74.01005
+    },
+    {
+      "zone_id": 31485,
+      "pickups": 144292,
+      "zlat": 40.73995,
+      "zlon": -74.00005
+    },
+    {
+      "zone_id": 31484,
+      "pickups": 142679,
+      "zlat": 40.73995,
+      "zlon": -74.01005
+    },
+    {
+      "zone_id": 31197,
+      "pickups": 140813,
+      "zlat": 40.729949999999995,
+      "zlon": -74.00005
+    }
+  ],
+  "spatial_join_operator": "BroadcastIndexJoin",
+  "seconds": 27.68151569366455,
+  "postgis_rows": 1326020
+}
