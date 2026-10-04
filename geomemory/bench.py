@@ -282,10 +282,11 @@ def e3_processes(sc: Scale, seed: int) -> dict:
     for n in sc.e3_nodes:
         with ProcessCluster(KDPartitioner(n * 4, sample), n) as pc:
             ingest_s, _ = timed(lambda: pc.ingest_many(data))
-            pc.radius_batch(qs[:10])  # warm-up
-            runs = [timed(lambda: pc.radius_batch(qs))[0] for _ in range(3)]
+            pc.radius_batch(qs[:10], count_only=True)  # warm-up
+            runs = [timed(lambda: pc.radius_batch(qs, count_only=True))[0] for _ in range(3)]
             wall = min(runs)
-            ok = pc.radius_batch(qs[:5]) == truth
+            ok = (pc.radius_batch(qs[:5]) == truth
+                  and pc.radius_batch(qs[:5], count_only=True) == [len(t) for t in truth])
             sizes = list(pc.partition_sizes().values())
         t1 = t1 or wall
         rows.append({"workers": n, "wall_s": wall, "queries_per_s": len(qs) / wall,
@@ -590,13 +591,19 @@ def run(scale: str = "S", experiments=None, seed: int = 42, out: str | None = No
         r["seconds"] = dt
         res["experiments"][name] = r
         log(f"  {name} done in {dt:.1f}s")
+        if out:  # save after every experiment so a long run never loses work
+            _write(res, Path(out))
     if out:
-        d = Path(out)
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "results.json").write_text(json.dumps(res, indent=2))
-        (d / "RESULTS.md").write_text(render_markdown(res))
-        log(f"wrote {d / 'results.json'} and {d / 'RESULTS.md'}")
+        log(f"wrote {Path(out) / 'results.json'} and {Path(out) / 'RESULTS.md'}")
     return res
+
+
+def _write(res: dict, d: Path) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / "results.json.tmp"
+    tmp.write_text(json.dumps(res, indent=2))
+    tmp.replace(d / "results.json")
+    (d / "RESULTS.md").write_text(render_markdown(res))
 
 
 def main(argv=None) -> None:

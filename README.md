@@ -13,6 +13,14 @@ This loads a demo world around Coimbatore. It has a factory where Machine_47 fai
 - **Explore:** pick a spot on the map and a time window, then ask what happened there or what changed. You can also ask what happened before an event, or combine conflicting sources into one location. Every result shows its source and confidence, and clicking a result opens its full provenance chain.
 - **Benchmarks:** view the E1–E6 results as charts and tables. Switch between scales.
 
+**On real data:** `python3 -m geomemory.demo --dataset uber` loads 1.8M real NYC Uber pickups (July and September 2014). Its scenarios include:
+- Times Square's weekly rhythm
+- Brooklyn Heights on July 4th (near the fireworks, pickups were 2.7× a normal Friday)
+- JFK pickups split by dispatch base
+- Saturday night hotspots
+
+Every query answers in under 0.3 s.
+
 It uses MapLibre and OpenFreeMap tiles (no API key needed), and has light and dark mode. It works on phone-sized screens.
 
 ## Status: Phases 1–5 done

@@ -205,6 +205,9 @@ class TemporalIndex:
         self._times.insert(i, t)
         self._keys.insert(i, key)
 
+    def count(self, start: datetime, end: datetime) -> int:
+        return bisect.bisect_right(self._times, end) - bisect.bisect_left(self._times, start)
+
     def range(self, start: datetime, end: datetime) -> list[str]:
         """Keys with start <= t <= end."""
         lo = bisect.bisect_left(self._times, start)

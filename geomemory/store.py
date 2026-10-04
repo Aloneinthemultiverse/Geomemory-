@@ -106,17 +106,34 @@ class GeoMemory:
     def radius_between(
         self, center: Point, radius_m: float, start: datetime, end: datetime
     ) -> list[Observation]:
-        """Spatio-temporal query (§12.7): runs the more selective filter first."""
-        spatial = self.radius(center, radius_m)
-        temporal_ids = self._temporal.range(start, end)
-        if len(spatial) <= len(temporal_ids):
-            return sorted(
-                (o for o in spatial if start <= o.timestamp <= end), key=lambda o: o.timestamp
-            )
-        return [
-            o for o in (self._obs[k] for k in temporal_ids)
-            if haversine_m(center, o.location) <= radius_m
-        ]
+        """Spatio-temporal query (§12.7): runs the more selective filter first.
+
+        The time window's size is known exactly and cheaply (two bisections).
+        Spatial candidates are walked lazily and abandoned as soon as they
+        outnumber it, so the cost is about min(spatial, temporal), never both.
+        """
+        if radius_m < 0:
+            raise ValueError("radius_m must be >= 0")
+        if end < start:
+            return []
+        n_time = self._temporal.count(start, end)
+        seen: set[str] = set()
+        spatial_cheaper = True
+        for box in bbox_for_radius(center, radius_m):
+            for k in self._spatial.candidates_in_bbox(*box):
+                seen.add(k)
+                if len(seen) > n_time:
+                    spatial_cheaper = False
+                    break
+            if not spatial_cheaper:
+                break
+        if spatial_cheaper:
+            hits = (self._obs[k] for k in seen)
+            return sorted((o for o in hits if start <= o.timestamp <= end
+                           and haversine_m(center, o.location) <= radius_m),
+                          key=lambda o: o.timestamp)
+        return [o for o in (self._obs[k] for k in self._temporal.range(start, end))
+                if haversine_m(center, o.location) <= radius_m]
 
     def entity_history(self, entity_id: str) -> list[Observation]:
         return sorted((self._obs[k] for k in self._by_entity.get(entity_id, ())),

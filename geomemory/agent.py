@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Iterable
 
+from dataclasses import replace as dataclass_replace
+
 from .model import Observation, Point, haversine_m
 from . import trust
 
@@ -135,6 +137,27 @@ TOOLS: list[dict] = [
      "description": "An observation with its full provenance lineage.",
      "parameters": {"type": "object", "required": ["observation_id"],
                     "properties": {"observation_id": {"type": "string"}}}},
+    {"name": "activity",
+     "description": "How many observations occurred over time in an area: counts per "
+                    "time bucket, optionally split by source_id or event_type.",
+     "parameters": {"type": "object",
+                    "required": ["lat", "lon", "radius_m", "start", "end", "bucket_minutes"],
+                    "properties": {"lat": {"type": "number"}, "lon": {"type": "number"},
+                                   "radius_m": {"type": "number"},
+                                   "start": {"type": "string"}, "end": {"type": "string"},
+                                   "bucket_minutes": {"type": "number"},
+                                   "group_by": {"type": "string",
+                                                "enum": ["source_id", "event_type"]}}}},
+    {"name": "hotspots",
+     "description": "The busiest places in an area and time window: the top cells of "
+                    "size cell_m by number of observations.",
+     "parameters": {"type": "object",
+                    "required": ["lat", "lon", "radius_m", "start", "end", "cell_m"],
+                    "properties": {"lat": {"type": "number"}, "lon": {"type": "number"},
+                                   "radius_m": {"type": "number"},
+                                   "start": {"type": "string"}, "end": {"type": "string"},
+                                   "cell_m": {"type": "number"}, "top": {"type": "integer"},
+                                   "event_type": {"type": "string"}}}},
     {"name": "fused_location",
      "description": "Best location estimate for an entity from all sources in a window, "
                     "with uncertainty and conflicting (outlier) observations.",
@@ -145,13 +168,15 @@ TOOLS: list[dict] = [
 
 
 class AgentInterface:
-    def __init__(self, mem) -> None:
-        """`mem` is a GeoMemory or a Cluster."""
+    def __init__(self, mem, dataset: str = "synthetic") -> None:
+        """`mem` is a GeoMemory or a Cluster; `dataset` labels it for the UI."""
         self.mem = mem
+        self.dataset = dataset
         self._tools: dict[str, Callable[[dict], dict]] = {
             "events_near": self.events_near, "what_changed": self.what_changed,
             "history_before": self.history_before, "nearby_entities": self.nearby_entities,
             "evidence": self.evidence, "fused_location": self.fused_location,
+            "activity": self.activity, "hotspots": self.hotspots,
         }
 
     def dispatch(self, name: Any, args: Any) -> dict:
@@ -239,10 +264,11 @@ class AgentInterface:
         far_future = datetime(9999, 12, 30, tzinfo=timezone.utc)
         obs = self.mem.between(far_past, far_future)
         if not obs:
-            return {"ok": True, "count": 0, "observations": [], "event_types": [],
-                    "sources": [], "entities": 0}
+            return {"ok": True, "dataset": self.dataset, "count": 0, "observations": [],
+                    "event_types": [], "sources": [], "entities": 0}
         step = max(1, len(obs) // limit)
-        return {"ok": True, "count": len(obs), "entities": len({o.entity_id for o in obs}),
+        return {"ok": True, "dataset": self.dataset, "count": len(obs),
+                "entities": len({o.entity_id for o in obs}),
                 "sources": sorted({o.source_id for o in obs}),
                 "event_types": sorted({o.event_type for o in obs}),
                 "start": obs[0].timestamp.isoformat(), "end": obs[-1].timestamp.isoformat(),
@@ -263,6 +289,56 @@ class AgentInterface:
         return {"ok": True, "observation": _obs_json(root),
                 "lineage": [_obs_json(o) for o in chain],
                 "inputs": list(root.provenance.inputs)}
+
+    def activity(self, args: dict) -> dict:
+        c, r = _point(args), _num(args, "radius_m", 0, 2.1e7)
+        start, end = _window(args)
+        bucket = timedelta(minutes=_num(args, "bucket_minutes", 1, 1e7))
+        n_buckets = int((end - start) / bucket) + 1
+        if n_buckets > 5000:
+            raise ToolError("too many buckets: widen bucket_minutes or shorten the window")
+        group = args.get("group_by")
+        if group not in (None, "source_id", "event_type"):
+            raise ToolError("group_by must be source_id or event_type")
+        hits = self.mem.radius_between(c, r, start, end)
+        counts = [0] * n_buckets
+        groups: dict[str, list[int]] = {}
+        for o in hits:
+            i = int((o.timestamp - start) / bucket)
+            counts[i] += 1
+            if group:
+                groups.setdefault(getattr(o, group), [0] * n_buckets)[i] += 1
+        return {"ok": True, "count": len(hits), "bucket_minutes": bucket.total_seconds() / 60,
+                "buckets": [{"start": (start + i * bucket).isoformat(), "count": n}
+                            for i, n in enumerate(counts)],
+                "groups": {k: v for k, v in sorted(groups.items())} if group else None,
+                "sources": sorted({o.source_id for o in hits})}
+
+    def hotspots(self, args: dict) -> dict:
+        c, r = _point(args), _num(args, "radius_m", 0, 2.1e7)
+        start, end = _window(args)
+        cell = _num(args, "cell_m", 10, 1e6)
+        top = int(_num(args, "top", 1, 500, default=20))
+        etype = _str(args, "event_type", required=False)
+        hits = [o for o in self.mem.radius_between(c, r, start, end)
+                if etype is None or o.event_type == etype]
+        if not hits:
+            return {"ok": True, "count": 0, "hotspots": []}
+        # Count every hit regardless of type: relabel to one type for trust.hotspots.
+        cells = trust.hotspots([dataclass_replace(o, event_type="*") for o in hits], "*", cell, 1)
+        by_id = {o.observation_id: o for o in hits}
+        out = []
+        for h in cells[:top]:
+            pts = [by_id[i] for i in h["evidence"]]
+            out.append({"lat": sum(p.location.lat for p in pts) / len(pts),
+                        "lon": sum(p.location.lon for p in pts) / len(pts),
+                        "count": h["count"],
+                        "sources": dict(sorted(
+                            {s: sum(1 for p in pts if p.source_id == s)
+                             for s in {p.source_id for p in pts}}.items())),
+                        "sample": h["evidence"][:20]})
+        return {"ok": True, "count": len(hits), "cell_m": cell, "hotspots": out,
+                "sources": sorted({o.source_id for o in hits})}
 
     def fused_location(self, args: dict) -> dict:
         entity = _str(args, "entity_id")
@@ -303,7 +379,8 @@ def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
     GET /api/results the latest benchmark results, GET /tools the tool
     schemas; POST /tools/<name> with a JSON body calls one tool."""
     from pathlib import Path
-    ui_html = (Path(__file__).parent / "ui" / "index.html").read_bytes()
+    ui_path = Path(__file__).parent / "ui" / "index.html"
+    cache: dict = {}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):  # keep test output quiet
@@ -320,6 +397,7 @@ def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
         def do_GET(self):
             path = self.path.split("?", 1)[0]
             if path in ("/", "/index.html"):
+                ui_html = ui_path.read_bytes()  # re-read so UI edits need no restart
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(ui_html)))
@@ -328,7 +406,9 @@ def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
             elif path == "/tools":
                 self._send(200, {"tools": TOOLS})
             elif path == "/api/overview":
-                self._send(200, agent.overview())
+                if "overview" not in cache:
+                    cache["overview"] = agent.overview()
+                self._send(200, cache["overview"])
             elif path == "/api/results":
                 runs = {}
                 if results_dir:

@@ -121,6 +121,56 @@ class AgentToolTests(unittest.TestCase):
         self.assertIn("unavailable", r["error"])
 
 
+class ActivityAndHotspotTests(unittest.TestCase):
+    def setUp(self):
+        rng = random.Random(3)
+        self.pts = [obs(f"e{i}", rng.choice(["a", "b"]), 40.75 + rng.gauss(0, 0.01),
+                        -73.98 + rng.gauss(0, 0.01), minutes=rng.uniform(0, 600),
+                        source=rng.choice(["B1", "B2", "B3"])) for i in range(4000)]
+        # a dense cluster that must come out on top
+        self.pts += [obs(f"h{i}", "a", 40.76 + rng.gauss(0, 0.0003), -73.97 + rng.gauss(0, 0.0003),
+                         minutes=rng.uniform(0, 600), source="B1") for i in range(300)]
+        gm = GeoMemory()
+        gm.ingest_many(self.pts)
+        self.ag = AgentInterface(gm)
+
+    def test_activity_matches_brute_force(self):
+        args = {"lat": 40.75, "lon": -73.98, "radius_m": 1500, "start": iso(30), "end": iso(500),
+                "bucket_minutes": 45, "group_by": "source_id"}
+        r = self.ag.dispatch("activity", args)
+        c = Point(40.75, -73.98)
+        a, b = T0 + timedelta(minutes=30), T0 + timedelta(minutes=500)
+        inside = [o for o in self.pts if a <= o.timestamp <= b and haversine_m(c, o.location) <= 1500]
+        self.assertEqual(r["count"], len(inside))
+        self.assertEqual(sum(x["count"] for x in r["buckets"]), len(inside))
+        for i, bk in enumerate(r["buckets"]):
+            lo = a + timedelta(minutes=45 * i)
+            want = sum(1 for o in inside if lo <= o.timestamp < lo + timedelta(minutes=45))
+            self.assertEqual(bk["count"], want, i)
+        self.assertEqual(sum(map(sum, r["groups"].values())), len(inside))
+        self.assertEqual([x["count"] for x in r["buckets"]],
+                         [sum(v[i] for v in r["groups"].values()) for i in range(len(r["buckets"]))])
+
+    def test_activity_rejects_bad_buckets(self):
+        base = {"lat": 0, "lon": 0, "radius_m": 1, "start": iso(0), "end": iso(10 ** 6)}
+        self.assertFalse(self.ag.dispatch("activity", {**base, "bucket_minutes": 1})["ok"])
+        self.assertFalse(self.ag.dispatch("activity", {**base, "bucket_minutes": 60,
+                                                       "group_by": "entity_id"})["ok"])
+
+    def test_hotspots_find_the_cluster(self):
+        r = self.ag.dispatch("hotspots", {"lat": 40.75, "lon": -73.98, "radius_m": 5000,
+                                          "start": iso(0), "end": iso(600), "cell_m": 150, "top": 5})
+        top = r["hotspots"][0]
+        self.assertLess(haversine_m(Point(top["lat"], top["lon"]), Point(40.76, -73.97)), 100)
+        self.assertGreater(top["sources"]["B1"], 100)
+        self.assertEqual(sum(top["sources"].values()), top["count"])
+        counts = [h["count"] for h in r["hotspots"]]
+        self.assertEqual(counts, sorted(counts, reverse=True))
+        empty = self.ag.dispatch("hotspots", {"lat": 0, "lon": 0, "radius_m": 10, "start": iso(0),
+                                              "end": iso(1), "cell_m": 100})
+        self.assertEqual(empty["hotspots"], [])
+
+
 class RetrievalEvaluation(unittest.TestCase):  # §18.12 / E6
     def test_spatiotemporal_beats_keyword_baseline(self):
         rng = random.Random(42)
@@ -183,7 +233,7 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual({t["name"] for t in body["tools"]},
                          {"events_near", "what_changed", "history_before", "nearby_entities",
-                          "evidence", "fused_location"})
+                          "evidence", "fused_location", "activity", "hotspots"})
         code, body = self.call("/tools/history_before", {"entity_id": "Machine_47",
                                                          "event_type": "failure",
                                                          "lookback_minutes": 30})

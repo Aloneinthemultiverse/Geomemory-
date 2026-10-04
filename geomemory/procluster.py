@@ -71,6 +71,9 @@ def _worker(conn) -> None:
                 # [(query_index, pids, center, r)] -> [(query_index, [ids])]
                 res = [(qi, [o.observation_id for o in on(pids, lambda s: s.radius(c, r))])
                        for qi, pids, c, r in args]
+            elif op == "radius_count_batch":
+                res = [(qi, sum(len(stores[p].radius(c, r)) for p in pids if p in stores))
+                       for qi, pids, c, r in args]
             elif op == "sizes":
                 res = {pid: len(s) for pid, s in stores.items()}
             elif op == "dump":
@@ -254,10 +257,13 @@ class ProcessCluster:
         hits = self._scatter(self._all(), lambda ps: ("entity_history", (ps, entity_id)))
         return sorted(hits, key=lambda o: (o.timestamp, o.observation_id))
 
-    def radius_batch(self, queries: list[tuple[Point, float]]) -> list[set[str]]:
-        """Many radius queries in one round trip per worker; returns id sets.
-        This is the throughput workload for experiment E3."""
-        out: list[set[str]] = [set() for _ in queries]
+    def radius_batch(self, queries: list[tuple[Point, float]],
+                     count_only: bool = False) -> list:
+        """Many radius queries in one round trip per worker; returns id sets,
+        or hit counts with count_only (no result transfer: measures the
+        parallel work itself). This is the throughput workload for E3."""
+        out: list = [0 if count_only else set() for _ in queries]
+        op = "radius_count_batch" if count_only else "radius_batch"
         pending = {qi: self._pids_for_radius(c, r) for qi, (c, r) in enumerate(queries)}
         while any(pending.values()):
             all_pids = set().union(*pending.values())
@@ -270,12 +276,15 @@ class ProcessCluster:
                 for w, ps in by_w.items():
                     c, r = queries[qi]
                     reqs[w].append((qi, ps, c, r))
-            answers = self._exchange({w: ("radius_batch", items) for w, items in reqs.items()})
+            answers = self._exchange({w: (op, items) for w, items in reqs.items()})
             for w, items in reqs.items():
                 if w not in answers:
                     continue
-                for qi, ids in answers[w]:
-                    out[qi].update(ids)
+                for qi, got in answers[w]:
+                    if count_only:
+                        out[qi] += got
+                    else:
+                        out[qi].update(got)
                 for qi, ps, _, _ in items:
                     pending[qi] -= set(ps)
         return out

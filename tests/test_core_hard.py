@@ -63,6 +63,22 @@ class RandomizedOracle(unittest.TestCase):
             ts = [o.timestamp for o in got]
             self.assertEqual(ts, sorted(ts))
 
+    def test_planner_switches_without_changing_answers(self):
+        """Huge area + tiny window, tiny area + huge window, and in between."""
+        rng = random.Random(77)
+        pts = hotspot_world(rng, 6000, spread=0.01)
+        gm = GeoMemory()
+        gm.ingest_many(pts)
+        c = Point(11.0, 76.0)
+        for r, a_min, span in ((2e7, 500, 0.5), (5, 0, 10_000), (2000, 100, 300), (2e7, 0, 10_000)):
+            a, b = T0 + timedelta(minutes=a_min), T0 + timedelta(minutes=a_min + span)
+            got = gm.radius_between(c, r, a, b)
+            self.assertEqual(ids(got), brute_radius(pts, c, r) & brute_between(pts, a, b), r)
+            self.assertEqual([o.timestamp for o in got], sorted(o.timestamp for o in got))
+        self.assertEqual(gm.radius_between(c, 100, T0 + timedelta(1), T0), [])
+        with self.assertRaises(ValueError):
+            gm.radius_between(c, -1, T0, T0)
+
     def test_between_many_windows(self):
         rng = random.Random(9)
         pts = uniform_world(rng, 3000)

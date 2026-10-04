@@ -44,6 +44,7 @@ class ProcessClusterTests(unittest.TestCase):
                                      brute_radius(self.pts, c, r) & brute_between(self.pts, a, b))
                 batch = pc.radius_batch(qs)
                 self.assertEqual(batch, [brute_radius(self.pts, c, r) for c, r in qs])
+                self.assertEqual(pc.radius_batch(qs, count_only=True), [len(b) for b in batch])
                 self.assertEqual(ids(pc.between(T0, T0 + timedelta(minutes=777))),
                                  brute_between(self.pts, T0, T0 + timedelta(minutes=777)))
                 ring = [Point(10, 75), Point(10, 77), Point(12, 77), Point(12, 75)]

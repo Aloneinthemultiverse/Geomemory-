@@ -206,6 +206,8 @@ td.n { text-align: right; } th.n { text-align: right; }
         <div class="seg" id="areaTool" style="grid-template-columns:1fr 1fr">
           <button class="on" data-tool="events_near">Events</button>
           <button data-tool="what_changed">What changed</button>
+          <button data-tool="activity">Activity</button>
+          <button data-tool="hotspots">Hotspots</button>
         </div>
         <div class="row">
           <div><label>Latitude</label><input type="number" id="lat" step="0.0001"></div>
@@ -220,6 +222,18 @@ td.n { text-align: right; } th.n { text-align: right; }
           <span class="chip" data-hours="1">1 h</span><span class="chip" data-hours="24">24 h</span>
           <span class="chip" data-hours="168">7 d</span><span class="chip" data-hours="720">30 d</span>
           <span class="chip" data-hours="1440">60 d</span>
+        </div>
+        <div id="activityFields" hidden>
+          <div class="row">
+            <div><label>Bucket (min)</label><input type="number" id="bucket" value="60" min="1"></div>
+            <div><label>Split by</label><select id="groupBy"><option value="">Nothing</option><option value="source_id">Source</option><option value="event_type">Event type</option></select></div>
+          </div>
+        </div>
+        <div id="hotFields" hidden>
+          <div class="row">
+            <div><label>Cell size (m)</label><input type="number" id="cell" value="250" min="10"></div>
+            <div><label>Top</label><input type="number" id="top" value="15" min="1" max="500"></div>
+          </div>
         </div>
         <div id="areaFilters">
           <label>Event type</label><select id="etype"><option value="">Any</option></select>
@@ -368,7 +382,11 @@ function setMode(m) {
   $$("[data-panel]").forEach(p => p.hidden = p.dataset.panel !== m);
   drawSearchArea();
 }
-seg("areaTool", "areaTool", () => $("#areaFilters").hidden = state.areaTool !== "events_near");
+seg("areaTool", "areaTool", () => {
+  $("#areaFilters").hidden = state.areaTool !== "events_near";
+  $("#activityFields").hidden = state.areaTool !== "activity";
+  $("#hotFields").hidden = state.areaTool !== "hotspots";
+});
 seg("entityTool", "entityTool", () => {
   $("#beforeFields").hidden = state.entityTool !== "history_before";
   $("#nearbyFields").hidden = state.entityTool !== "nearby_entities";
@@ -404,7 +422,7 @@ function initMap() {
     return;
   }
   map = new maplibregl.Map({ container: "map", style: STYLES[isDark() ? "dark" : "light"],
-                             center: [state.lon, state.lat], zoom: 11, attributionControl: {compact: true} });
+                             center: [state.lon, state.lat], zoom: overview?.dataset === "uber" ? 10.5 : 11, attributionControl: {compact: true} });
   map.addControl(new maplibregl.NavigationControl({showCompass: false}), "top-right");
   map.on("style.load", addLayers);
   map.on("error", e => { if (!mapReady) $("#mapBadge").textContent = "Map tiles unavailable – data layers still shown"; });
@@ -425,7 +443,7 @@ function initMap() {
 function setMapStyle() { if (map) { mapReady = false; map.setStyle(STYLES[isDark() ? "dark" : "light"]); } }
 function addLayers() {
   const add = (id, data) => map.getSource(id) ? map.getSource(id).setData(data) : map.addSource(id, {type: "geojson", data});
-  add("all", fc([])); add("area", fc([])); add("unc", fc([])); add("hitsrc", fc([])); add("fused", fc([]));
+  add("all", fc([])); add("area", fc([])); add("unc", fc([])); add("hitsrc", fc([])); add("fused", fc([])); add("hot", fc([]));
   map.addLayer({id: "all", type: "circle", source: "all", paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 1.5, 15, 4],
     "circle-color": ["get", "color"], "circle-opacity": 0.35}});
@@ -436,6 +454,11 @@ function addLayers() {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 16, 8],
     "circle-color": ["get", "color"], "circle-stroke-color": isDark() ? "#0d1014" : "#fff",
     "circle-stroke-width": 1.5, "circle-opacity": ["interpolate", ["linear"], ["get", "conf"], 0, 0.35, 1, 1]}});
+  map.addLayer({id: "hot", type: "circle", source: "hot", paint: {
+    "circle-radius": ["interpolate", ["linear"], ["sqrt", ["get", "share"]], 0, 3, 1, 14],
+    "circle-color": "#dc2626", "circle-opacity": 0.6, "circle-stroke-color": "#dc2626", "circle-stroke-width": 1.5}});
+  map.addLayer({id: "hot-label", type: "symbol", source: "hot", layout: {"text-field": ["get", "rank"], "text-size": 11,
+    "text-font": ["Noto Sans Bold"], "text-allow-overlap": true}, paint: {"text-color": "#fff"}});
   map.addLayer({id: "fused", type: "line", source: "fused", paint: {"line-color": "#16a34a", "line-width": 2.5}});
   mapReady = true;
   $("#mapBadge").textContent = overview ? `${overview.count.toLocaleString()} observations${overview.sampled ? " (sampled)" : ""}` : "";
@@ -448,11 +471,15 @@ function drawSearchArea() {
 }
 function drawResult(res) {
   const obs = res.observations || [];
+  const hs = res.hotspots || [];
+  const maxc = Math.max(1, ...hs.map(h => h.count));
+  setData("hot", fc(hs.map((h, i) => ({type: "Feature", geometry: {type: "Point", coordinates: [h.lon, h.lat]},
+    properties: {share: h.count / maxc, rank: String(i + 1)}}))));
   setData("hitsrc", fc(obs.map(ptFeature)));
   setData("unc", fc(obs.filter(o => o.uncertainty_m > 0).map(o => ({...circle(o.lat, o.lon, o.uncertainty_m, 36), properties: {color: colorOf[o.event_type] || "#888"}}))));
   setData("fused", res.lat != null ? fc([circle(res.lat, res.lon, Math.max(res.uncertainty_m * 2, 3))]) : fc([]));
   if (!map) return;
-  const pts = obs.map(o => [o.lon, o.lat]);
+  const pts = obs.map(o => [o.lon, o.lat]).concat(hs.map(h => [h.lon, h.lat]));
   if (res.lat != null) pts.push([res.lon, res.lat]);
   if (mode === "area") pts.push(...circle(state.lat, state.lon, radiusM(), 8).geometry.coordinates[0]);
   if (pts.length) {
@@ -471,6 +498,11 @@ async function run() {
     if (tool === "events_near") {
       if ($("#etype").value) args.event_type = $("#etype").value;
       args.min_confidence = +$("#minconf").value / 100;
+    } else if (tool === "activity") {
+      delete args.limit; args.bucket_minutes = +$("#bucket").value;
+      if ($("#groupBy").value) args.group_by = $("#groupBy").value;
+    } else if (tool === "hotspots") {
+      delete args.limit; args.cell_m = +$("#cell").value; args.top = +$("#top").value;
     }
   } else if (mode === "entity") {
     tool = state.entityTool;
@@ -524,6 +556,10 @@ function renderResult(res) {
       res.changed.map(c => `<li><b>${esc(c.entity_id)}</b><br>${esc(c.from)}<span class="arrow">→</span>${esc(c.to)}${c.moved_m > 1 ? ` <span class="desc">· moved ${fmtM(Math.round(c.moved_m))}</span>` : ""}</li>`).join("") +
       `</ul></div>`;
   }
+  if (res._tool === "activity") html += activityChart(res);
+  if (res._tool === "hotspots") {
+    html += `<div class="section"><h3>Top ${res.hotspots.length} hotspots · ${fmtM(res.cell_m)} cells</h3>${res.hotspots.length ? `<ul class="changes">${res.hotspots.map((h, i) => `<li data-lat="${h.lat}" data-lon="${h.lon}" style="cursor:pointer"><b>#${i + 1}</b> · ${h.count.toLocaleString()} observations<br><span class="desc mono">${h.lat.toFixed(4)}, ${h.lon.toFixed(4)}</span><br><span class="desc">${Object.entries(h.sources).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}</span></li>`).join("")}</ul>` : `<p class="desc">Nothing in this area and window.</p>`}</div>`;
+  }
   if (res._tool === "history_before" && res.anchor) {
     html += `<div class="section"><h3>Before ${esc(res.anchor.event_type)} of ${esc(res.entity_id)}</h3>
       <ul class="changes">${res.timeline.map(t => `<li><span class="mono">T${t.offset_minutes >= 0 ? "+" : ""}${fmtNum(t.offset_minutes, 1)} min</span> · <b>${esc(t.event_type)}</b><br><span class="desc">${esc(t.source_id)} · confidence ${t.confidence.toFixed(2)}</span></li>`).join("")}
@@ -547,11 +583,40 @@ function renderResult(res) {
         <div><div class="t-top"><span class="t-ev">${esc(o.event_type)}${out.has(o.observation_id) ? ' <span class="bad">outlier</span>' : ""}</span><span class="t-time">${fmtTime(o.timestamp)}</span></div>
         <div>${esc(o.entity_id)}</div>
         <div class="t-meta"><span>${esc(o.source_id)}</span><span class="conf"><i style="--w:${o.confidence * 100}%"></i>${o.confidence.toFixed(2)}</span>${o.uncertainty_m ? `<span>±${fmtNum(o.uncertainty_m, 0)} m</span>` : ""}</div></div></li>`).join("") + `</ul>`;
-  } else if (res._tool !== "what_changed") {
+  } else if (!["what_changed", "activity", "hotspots"].includes(res._tool)) {
     html += `<div class="empty">No observations matched.</div>`;
   }
   el.innerHTML = html;
   $$("#results .timeline li").forEach(li => li.onclick = () => openEvidence(li.dataset.id));
+  $$("#results li[data-lat]").forEach(li => li.onclick = () => map?.easeTo({center: [+li.dataset.lon, +li.dataset.lat], zoom: 16}));
+}
+
+function activityChart(res) {
+  const b = res.buckets, W = 340, H = 150, P = {l: 34, r: 6, t: 8, b: 22};
+  const groups = res.groups ? Object.entries(res.groups) : [["all", b.map(x => x.count)]];
+  const max = Math.max(1, ...b.map(x => x.count));
+  const bw = (W - P.l - P.r) / b.length;
+  const y = v => P.t + (H - P.t - P.b) * (1 - v / max);
+  const gcol = (i) => res.groups ? PALETTE[i % PALETTE.length] : "var(--accent)";
+  let bars = "";
+  b.forEach((_, i) => {
+    let acc = 0;
+    groups.forEach(([, arr], gi) => {
+      const v = arr[i]; if (!v) return;
+      bars += `<rect x="${(P.l + i * bw).toFixed(2)}" y="${y(acc + v).toFixed(2)}" width="${Math.max(0.6, bw - 0.6).toFixed(2)}" height="${(y(acc) - y(acc + v)).toFixed(2)}" fill="${gcol(gi)}"><title>${esc(b[i].start.slice(0, 16).replace("T", " "))} UTC · ${v}</title></rect>`;
+      acc += v;
+    });
+  });
+  const ticks = [0, 0.5, 1].map(f => `<text x="${P.l - 4}" y="${y(max * f) + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${Math.round(max * f)}</text><line x1="${P.l}" x2="${W - P.r}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="var(--line)"/>`).join("");
+  const days = [];
+  b.forEach((x, i) => { if (i === 0 || x.start.slice(0, 10) !== b[i - 1].start.slice(0, 10)) days.push(i); });
+  const step = Math.max(1, Math.ceil(days.length / 7));
+  const xl = (days.length > 1 ? days.filter((_, k) => k % step === 0) : [0, Math.floor(b.length / 2)]).map(i => `<text x="${P.l + i * bw}" y="${H - 6}" font-size="9" fill="var(--muted)">${days.length > 1 ? b[i].start.slice(5, 10) : b[i].start.slice(11, 16)}</text>`).join("");
+  const peak = b.reduce((m, x) => x.count > m.count ? x : m, b[0]);
+  const legend = res.groups ? `<div class="legend" style="grid-template-columns:1fr 1fr;margin-top:8px">${groups.map(([k, arr], gi) => `<div><span class="dot" style="background:${gcol(gi)}"></span>${esc(k)} · ${arr.reduce((a, c) => a + c, 0).toLocaleString()}</div>`).join("")}</div>` : "";
+  return `<div class="section"><h3>Activity · ${fmtNum(res.bucket_minutes, 0)} min buckets (UTC)</h3>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Activity over time">${ticks}${bars}${xl}</svg>
+    <p class="desc" style="margin:6px 0 0">Peak ${peak.count.toLocaleString()} at ${esc(peak.start.slice(0, 16).replace("T", " "))} UTC</p>${legend}</div>`;
 }
 
 async function openEvidence(id) {
@@ -577,6 +642,23 @@ async function openEvidence(id) {
 document.addEventListener("keydown", e => e.key === "Escape" && $("#drawer").classList.remove("on"));
 
 /* ---------- scenarios ---------- */
+const UBER = {
+  ts() { area("activity", 40.7580, -73.9855, 250, "2014-07-07T04:00", "2014-07-14T04:00");
+         $("#bucket").value = 60; $("#groupBy").value = ""; run(); },
+  // 2014 Macy's fireworks were on the East River by the Brooklyn Bridge.
+  july4() { area("activity", 40.6960, -73.9950, 800, "2014-07-04T20:00", "2014-07-05T08:00");
+            $("#bucket").value = 30; $("#groupBy").value = ""; run(); },
+  normal() { area("activity", 40.6960, -73.9950, 800, "2014-07-11T20:00", "2014-07-12T08:00");
+             $("#bucket").value = 30; $("#groupBy").value = ""; run(); },
+  jfk() { area("activity", 40.6446, -73.7797, 2500, "2014-09-12T04:00", "2014-09-15T04:00");
+          $("#bucket").value = 60; $("#groupBy").value = "source_id"; run(); },
+  sat() { area("hotspots", 40.730, -73.950, 15000, "2014-09-14T02:00", "2014-09-14T06:00");
+          $("#cell").value = 300; $("#top").value = 20; run(); },
+};
+function area(tool, lat, lon, r, s, e) {
+  setMode("area"); setTool("areaTool", tool); setCenter(lat, lon); setRadius(r);
+  $("#start").value = s; $("#end").value = e;
+}
 const SCEN = {
   m47() { setMode("entity"); setTool("entityTool", "history_before");
           $("#entity").value = "Machine_47"; $("#anchor").value = "failure"; $("#lookback").value = 60; run(); },
@@ -588,7 +670,16 @@ const SCEN = {
               $("#etype").value = ""; $("#minconf").value = 0; syncOutputs();
               $("#start").value = toLocal(shift(nowIso(), -24)); $("#end").value = toLocal(nowIso()); run(); },
 };
-$$("#scenarios .chip").forEach(c => c.onclick = () => SCEN[c.dataset.s]());
+function wireScenarios() {
+  if (overview?.dataset === "uber") {
+    $("#scenarios").innerHTML = [["ts", "Times Square: a week"], ["july4", "July 4th: Brooklyn Heights"],
+      ["normal", "…same place, normal Friday"], ["jfk", "JFK by dispatch base"], ["sat", "Saturday night hotspots"]]
+      .map(([k, l]) => `<span class="chip" data-s="${k}">${l}</span>`).join("") +
+      `<p class="desc" style="margin:10px 0 0">Real NYC Uber pickups (TLC, 2014). Times are UTC; New York is UTC−4 in summer.</p>`;
+  }
+  const table = overview?.dataset === "uber" ? UBER : SCEN;
+  $$("#scenarios .chip").forEach(c => c.onclick = () => table[c.dataset.s]());
+}
 
 /* ---------- benchmarks ---------- */
 let benchLoaded = false;
@@ -677,6 +768,13 @@ async function boot() {
   $("#end").value = toLocal(e2); $("#start").value = toLocal(shift(e2, -24 * 7));
   $("#fend").value = toLocal(e2); $("#fstart").value = toLocal(shift(e2, -24 * 7));
   $("#at").value = toLocal(shift(e2, -0.33));
+  if (overview?.ok && overview.dataset !== "synthetic" && overview.observations.length) {
+    const ob = overview.observations, mid = ob[Math.floor(ob.length / 2)];
+    const lats = ob.map(o => o.lat).sort((a, b) => a - b), lons = ob.map(o => o.lon).sort((a, b) => a - b);
+    setCenter(lats[lats.length >> 1], lons[lons.length >> 1]);
+    $("#entity").value = mid.entity_id; $("#fentity").value = mid.entity_id;
+  }
+  wireScenarios();
   initMap();
   drawAll();
 }

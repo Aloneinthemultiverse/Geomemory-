@@ -131,10 +131,21 @@ def main(argv=None) -> None:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--results", default="results", help="benchmark results directory")
+    ap.add_argument("--dataset", choices=["synthetic", "uber"], default="synthetic",
+                    help="uber: real NYC pickups (run `python -m geomemory.datasets download`)")
+    ap.add_argument("--months", default="jul14,sep14",
+                    help="uber months to load, e.g. apr14,jul14 (all six: ~4.5M rows)")
     a = ap.parse_args(argv)
-    gm = GeoMemory()
-    gm.ingest_many(build_world())
-    srv, t = serve(AgentInterface(gm), a.host, a.port, results_dir=a.results)
+    from .index import QuadTreeIndex
+    gm = GeoMemory(QuadTreeIndex())
+    if a.dataset == "uber":
+        from .datasets import load_uber
+        months = tuple(m.strip() for m in a.months.split(",") if m.strip())
+        print(f"loading Uber pickups for {', '.join(months)} ...", flush=True)
+        gm.ingest_many(load_uber(months=months))
+    else:
+        gm.ingest_many(build_world())
+    srv, t = serve(AgentInterface(gm, a.dataset), a.host, a.port, results_dir=a.results)
     print(f"GeoMemory UI: http://{a.host}:{srv.server_address[1]}  ({len(gm):,} observations)")
     try:
         t.join()
