@@ -3,3 +3,4 @@ __pycache__/
 results/**/run.log
 data/raw/
 data/spark_out/
+results/run-all.log

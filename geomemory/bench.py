@@ -100,7 +100,7 @@ class Profile:
 
 PROFILES = {
     "synthetic": Profile("synthetic", 2_000, (500, 50_000), (20_000, 100_000, 300_000), "event_type"),
-    "uber": Profile("uber", 500, (200, 5_000), (1_000, 3_000, 10_000), "source_id"),
+    "uber": Profile("uber", 500, (200, 5_000), (500, 1_000, 3_000), "source_id"),
     "quakes": Profile("quakes", 100_000, (50_000, 500_000), (200_000, 1_000_000, 3_000_000),
                       "event_type"),
 }
@@ -486,8 +486,63 @@ def e6_retrieval(sc: Scale, seed: int) -> dict:
          "recall": statistics.fmean(kw_r), "latency": None}]}
 
 
+# --- E7: engine vs PostGIS --------------------------------------------------------
+
+def e7_postgis(sc: Scale, seed: int) -> dict:
+    """Same data and queries on the in-memory engine and on PostGIS (spec §24).
+    Answers are cross-checked; a disagreement marks the row incorrect."""
+    try:
+        from .backends.postgis import PostGISStore
+        pg = PostGISStore(table="bench_e7", reset=True)
+    except Exception as e:  # no database: report, don't crash the whole run
+        return {"skipped": f"PostGIS unavailable: {e}", "rows": []}
+    data = get_data(sc.e2_size, seed)
+    qs = get_queries(sc.queries, seed + 7, data)
+    small, large = profile().radii
+    t_lo = min(o.timestamp for o in data)
+    span = max(o.timestamp for o in data) - t_lo
+    hc = hot_points(data, 1)[0]
+    d = large / 111_000
+    ring = [Point(hc.lat - d, hc.lon - d), Point(hc.lat - d, hc.lon + d),
+            Point(hc.lat + d, hc.lon + d), Point(hc.lat + d, hc.lon - d)]
+    mem = GeoMemory(QuadTreeIndex())
+    engines = {"GeoMemory in-memory (QuadTree)": mem, "PostGIS 3.4 (GiST, geography)": pg}
+    answers: dict = {}
+    rows = []
+    for name, eng in engines.items():
+        ingest_s, _ = timed(lambda: eng.ingest_many(data))
+        win = [(t_lo + span * (i / sc.queries), t_lo + span * (i / sc.queries) + span / 30)
+               for i in range(sc.queries)]
+        lat = {
+            "radius_small": [timed(lambda c=c: eng.radius(c, small))[0] for c in qs],
+            "radius_large": [timed(lambda c=c: eng.radius(c, large))[0] for c in qs[:20]],
+            "knn_10": [timed(lambda c=c: eng.nearest(c, 10))[0] for c in qs],
+            "place_time": [timed(lambda c=c, w=w: eng.radius_between(c, large, *w))[0]
+                           for c, w in zip(qs, win)],
+            "polygon": [timed(lambda: eng.within_polygon(ring))[0] for _ in range(3)],
+        }
+        answers[name] = ([{o.observation_id for o in eng.radius(c, small)} for c in qs[:10]],
+                         [{o.observation_id for o in eng.radius_between(c, large, *w)}
+                          for c, w in list(zip(qs, win))[:10]],
+                         {o.observation_id for o in eng.within_polygon(ring)})
+        size_mb = None
+        if eng is pg:
+            with pg.conn.cursor() as cur:
+                cur.execute("SELECT pg_total_relation_size('bench_e7')")
+                size_mb = cur.fetchone()[0] / 2**20
+        rows.append({"backend": name, "ingest_per_s": len(data) / ingest_s,
+                     "storage_mb": size_mb,
+                     **{k: latency_stats(v) for k, v in lat.items()}})
+    a, b = list(answers.values())
+    agree = a == b
+    for r in rows:
+        r["correct"] = agree
+    pg.close()
+    return {"n": len(data), "radii_m": [small, large], "rows": rows}
+
+
 EXPERIMENTS = {"E1": e1_scaling, "E2": e2_indexes, "E3": e3_processes, "E3M": e3_distributed,
-               "E4": e4_streaming, "E5": e5_skew, "E6": e6_retrieval}
+               "E4": e4_streaming, "E5": e5_skew, "E6": e6_retrieval, "E7": e7_postgis}
 
 
 # --- report -----------------------------------------------------------------------
@@ -572,11 +627,26 @@ def render_markdown(res: dict) -> str:
                    [[r["method"], f'{r["precision"]:.4f}', f'{r["recall"]:.4f}',
                      r["latency"]["p50_ms"] if r["latency"] else None]
                     for r in e["E6"]["rows"]]), ""]
+    if "E7" in e and e["E7"].get("rows"):
+        x = e["E7"]
+        a, b = x["radii_m"]
+        md += [f"## E7: in-memory engine vs PostGIS ({x['n']:,} observations)\n",
+               "Same data, same queries. Answers are cross-checked between the two.\n", _table(
+                   ["Backend", "Ingest/s", "Storage MB", f"Radius {a:g} m p50",
+                    f"Radius {b:g} m p50", "10-NN p50", "Place+time p50", "Polygon p50",
+                    "Answers agree"],
+                   [[r["backend"], r["ingest_per_s"], r["storage_mb"],
+                     r["radius_small"]["p50_ms"], r["radius_large"]["p50_ms"],
+                     r["knn_10"]["p50_ms"], r["place_time"]["p50_ms"], r["polygon"]["p50_ms"],
+                     r["correct"]] for r in x["rows"]]), ""]
+    elif "E7" in e:
+        md += ["## E7: in-memory engine vs PostGIS\n", f"Skipped: {e['E7'].get('skipped')}\n"]
     return "\n".join(md)
 
 
 def run(scale: str = "S", experiments=None, seed: int = 42, out: str | None = None,
-        log: Callable[[str], None] = print, dataset: str = "synthetic") -> dict:
+        log: Callable[[str], None] = print, dataset: str = "synthetic",
+        keep: bool = False) -> dict:
     if dataset not in PROFILES:
         raise ValueError(f"unknown dataset {dataset!r}")
     _active["dataset"], _active["cache"] = dataset, {}
@@ -612,6 +682,8 @@ def main(argv=None) -> None:
     ap.add_argument("--experiments", default=",".join(EXPERIMENTS),
                     help="comma-separated subset, e.g. E1,E2")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--keep", action="store_true",
+                    help="add to an existing results.json for the same scale/dataset/seed")
     ap.add_argument("--dataset", choices=list(PROFILES), default="synthetic",
                     help="synthetic, or a real dataset (run `python -m geomemory.datasets download`)")
     ap.add_argument("--out", default="results")
@@ -620,7 +692,7 @@ def main(argv=None) -> None:
     bad = [x for x in names if x not in EXPERIMENTS]
     if bad:
         ap.error(f"unknown experiments: {bad}")
-    run(a.scale, names, a.seed, a.out, dataset=a.dataset)
+    run(a.scale, names, a.seed, a.out, dataset=a.dataset, keep=a.keep)
 
 
 if __name__ == "__main__":

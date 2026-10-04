@@ -75,6 +75,28 @@ python3 -m geomemory.bench --dataset uber --scale M --out results/M-uber
 
 Query sizes adapt to each dataset: 500 m is local in Manhattan, while 100 km is local for earthquakes.
 
+## Production backends (spec §24)
+
+The same interfaces run on real infrastructure. Each backend is optional, and its tests skip when it isn't available.
+
+| Spec component | Implementation | Module | Verified by |
+|---|---|---|---|
+| Spatial DB: PostgreSQL + PostGIS | `PostGISStore`: COPY bulk load, GiST geography index, recursive-CTE lineage. Drop-in replacement for `GeoMemory`. | `backends/postgis.py` | Same answers as brute force, including the ±180° line and the poles |
+| Graph layer (Neo4j or equivalent) | `AgeGraph`: Apache AGE, openCypher inside PostgreSQL | `backends/graph.py` | Same as the in-memory graph on neighbours, paths and evidence. Injection-safe. |
+| Ingestion: Apache Kafka | `KafkaStreamProcessor`: manual commits, dead-letter topic, exactly-once storage through idempotent sinks | `backends/kafka.py` | Real broker; duplicates, garbage and injected crashes, into memory and into PostGIS |
+| Distributed processing: Apache Spark | Spark + Apache Sedona batch pipeline: validate, spatial join to zones, hourly counts | `backends/spark.py` | Every count equals a plain Python pass |
+| Backend: FastAPI | Typed tool endpoints and OpenAPI docs at `/docs`. Serves the web UI. | `api.py` | Type errors return 422 and bad values return 400; fuzzed without a single 500 |
+
+```bash
+apt install postgresql-16-postgis-3 postgresql-16-age      # or any PostGIS + AGE install
+pip install "psycopg[binary]" fastapi uvicorn confluent-kafka pyspark==3.5.3 apache-sedona==1.6.1
+export GEOMEMORY_PG_DSN=postgresql://geomemory:geomemory@localhost:5432/geomemory
+scripts/kafka-dev.sh                                        # single-node Kafka (KRaft)
+python3 -m geomemory.api --backend postgis                  # FastAPI over PostGIS
+python3 -m geomemory.backends.spark --months all --to-postgis
+scripts/run-all-benchmarks.sh                               # full evaluation, run on an idle machine
+```
+
 ## Tests
 
 ```bash
@@ -92,5 +114,4 @@ Every query is checked against a scan of every record, across many random seeds,
 
 ## Next steps
 
-- Swap the simulated parts for real backends: Kafka, Spark or Sedona, PostGIS, and a graph store
-- Real multi-process workers, so the node-scaling test (E3) shows actual speedup
+- A multi-machine deployment (the cluster here uses processes on one machine)

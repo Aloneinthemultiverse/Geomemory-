@@ -15,7 +15,7 @@ class BenchTests(unittest.TestCase):
 
     def test_all_experiments_correct(self):
         e = self.res["experiments"]
-        self.assertEqual(sorted(e), ["E1", "E2", "E3", "E3M", "E4", "E5", "E6"])
+        self.assertEqual(sorted(e), ["E1", "E2", "E3", "E3M", "E4", "E5", "E6", "E7"])
         for name in ("E1", "E2", "E3", "E3M", "E4"):
             for row in e[name]["rows"]:
                 self.assertTrue(row["correct"], (name, row))
@@ -35,6 +35,13 @@ class BenchTests(unittest.TestCase):
         skew = {(r["distribution"], r["partitioner"]): r for r in e["E5"]["rows"]}
         self.assertLess(skew[("hotspot", "KD (adaptive)")]["imbalance_max_over_mean"],
                         skew[("hotspot", "Grid 10°")]["imbalance_max_over_mean"])
+
+    def test_e7_agrees_or_skips(self):
+        e7 = self.res["experiments"]["E7"]
+        if e7.get("skipped"):
+            self.skipTest(e7["skipped"])
+        self.assertEqual(len(e7["rows"]), 2)
+        self.assertTrue(all(r["correct"] for r in e7["rows"]))
 
     def test_files_written(self):
         d = Path(self.dir)
