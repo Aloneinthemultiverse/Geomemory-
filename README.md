@@ -29,6 +29,18 @@ Everything is in plain Python with no outside libraries.
 - `serve()` runs an HTTP API with no outside libraries: `GET /tools`, `POST /tools/<name>`
 - Retrieval scoring (precision/recall) plus a keyword-search baseline for experiment E6
 
+**Benchmarks**
+- `geomemory/bench.py` runs experiments E1–E6 from spec §20 on generated data: uniform, hotspot or mixed
+- New index types to compare: `ScanIndex` (no index), `GeohashIndex` and `QuadTreeIndex`
+- Every result is also checked against a full scan; a wrong answer is marked **NO**
+
+```bash
+python3 -m geomemory.bench --scale S --out results   # ~1 min; scales: tiny, S, M (up to 1M)
+python3 -m geomemory.bench --experiments E2,E5       # run a subset
+```
+
+Latest results: [results/RESULTS.md](results/RESULTS.md).
+
 ## Tests
 
 ```bash
@@ -46,6 +58,5 @@ Every query is checked against a scan of every record, across many random seeds,
 
 ## Next steps
 
-- Benchmark tool for experiments E1–E6
 - Swap the simulated parts for real backends: Kafka, Spark or Sedona, PostGIS, and a graph store
 - Real multi-process workers, so the node-scaling test (E3) shows actual speedup

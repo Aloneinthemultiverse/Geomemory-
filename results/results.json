@@ -1,0 +1,371 @@
+{
+  "scale": "S",
+  "seed": 42,
+  "python": "3.11.15",
+  "machine": "x86_64",
+  "started": "2026-10-04T10:29:12+00:00",
+  "experiments": {
+    "E1": {
+      "index": "quadtree",
+      "rows": [
+        {
+          "n": 10000,
+          "ingest_per_s": 185703.5939627072,
+          "radius_2km": {
+            "p50_ms": 0.049940999929276586,
+            "p95_ms": 0.1503370000364157,
+            "mean_ms": 0.05899892001252738
+          },
+          "time_1day": {
+            "p50_ms": 0.006763999977010826,
+            "p95_ms": 0.013026000033278251,
+            "mean_ms": 0.007471139986137132
+          },
+          "spatiotemporal": {
+            "p50_ms": 0.0493730000243886,
+            "p95_ms": 0.13737500000843283,
+            "mean_ms": 0.05396914000357356
+          },
+          "memory_mb": 1.4739913940429688,
+          "bytes_per_obs": 154.5592,
+          "correct": true
+        },
+        {
+          "n": 100000,
+          "ingest_per_s": 42279.18342991445,
+          "radius_2km": {
+            "p50_ms": 0.4030259999581176,
+            "p95_ms": 1.9290850000288629,
+            "mean_ms": 0.7219709999981205
+          },
+          "time_1day": {
+            "p50_ms": 0.08676400000240392,
+            "p95_ms": 0.11411900004532072,
+            "mean_ms": 0.09011137999550556
+          },
+          "spatiotemporal": {
+            "p50_ms": 0.7099670000343394,
+            "p95_ms": 2.4920970000721354,
+            "mean_ms": 1.0207442800060562
+          },
+          "memory_mb": 16.28832244873047,
+          "bytes_per_obs": 170.79544,
+          "correct": true
+        }
+      ],
+      "seconds": 7.8093641670000125
+    },
+    "E2": {
+      "n": 100000,
+      "rows": [
+        {
+          "index": "Scan (no index)",
+          "build_s": 1.9511046699999497,
+          "index_memory_mb": 6.86773681640625,
+          "radius_500m": {
+            "p50_ms": 7.905542999992576,
+            "p95_ms": 12.500379000016437,
+            "mean_ms": 8.362241120003091
+          },
+          "radius_50km": {
+            "p50_ms": 23.07871100003922,
+            "p95_ms": 28.72078200005035,
+            "mean_ms": 17.642730899997332
+          },
+          "knn_10": {
+            "p50_ms": 36.86905899996873,
+            "p95_ms": 71.87544900000375,
+            "mean_ms": 32.95717889999992
+          },
+          "polygon": {
+            "p50_ms": 22.482422000052793,
+            "p95_ms": 23.517437000009522,
+            "mean_ms": 22.318715400001565
+          },
+          "correct": true
+        },
+        {
+          "index": "Grid 0.01\u00b0",
+          "build_s": 2.167834014999926,
+          "index_memory_mb": 13.451637268066406,
+          "radius_500m": {
+            "p50_ms": 0.09222999995017744,
+            "p95_ms": 0.6061840000484153,
+            "mean_ms": 0.2503848000083053
+          },
+          "radius_50km": {
+            "p50_ms": 25.978801999940515,
+            "p95_ms": 34.71877799995582,
+            "mean_ms": 16.10200943998734
+          },
+          "knn_10": {
+            "p50_ms": 5.393937000008009,
+            "p95_ms": 9.92103299995506,
+            "mean_ms": 4.471974149998914
+          },
+          "polygon": {
+            "p50_ms": 23.259046000021044,
+            "p95_ms": 23.841309999966143,
+            "mean_ms": 23.042981399999007
+          },
+          "correct": true
+        },
+        {
+          "index": "Grid 1\u00b0",
+          "build_s": 2.0862732169999845,
+          "index_memory_mb": 7.0513916015625,
+          "radius_500m": {
+            "p50_ms": 4.78697000005468,
+            "p95_ms": 19.420359999912762,
+            "mean_ms": 7.5776832799942895
+          },
+          "radius_50km": {
+            "p50_ms": 18.65172700001949,
+            "p95_ms": 20.131690000084745,
+            "mean_ms": 9.968507700007194
+          },
+          "knn_10": {
+            "p50_ms": 19.14466599998832,
+            "p95_ms": 39.17995999995583,
+            "mean_ms": 16.95687089999751
+          },
+          "polygon": {
+            "p50_ms": 21.609281999985797,
+            "p95_ms": 22.132557000077213,
+            "mean_ms": 21.539320200031398
+          },
+          "correct": true
+        },
+        {
+          "index": "Geohash p6",
+          "build_s": 2.7749184140000125,
+          "index_memory_mb": 19.960326194763184,
+          "radius_500m": {
+            "p50_ms": 0.6174289999307803,
+            "p95_ms": 1.4367539999966539,
+            "mean_ms": 0.6513092599902848
+          },
+          "radius_50km": {
+            "p50_ms": 27.240251999955944,
+            "p95_ms": 29.749096999921676,
+            "mean_ms": 14.686902299993108
+          },
+          "knn_10": {
+            "p50_ms": 3.2001149999132394,
+            "p95_ms": 6.145644000071115,
+            "mean_ms": 2.846122549993879
+          },
+          "polygon": {
+            "p50_ms": 25.48888400008309,
+            "p95_ms": 25.675050000018018,
+            "mean_ms": 25.472723600046265
+          },
+          "correct": true
+        },
+        {
+          "index": "QuadTree",
+          "build_s": 2.5524069409999584,
+          "index_memory_mb": 8.634933471679688,
+          "radius_500m": {
+            "p50_ms": 0.052618000040638435,
+            "p95_ms": 0.21826600004715146,
+            "mean_ms": 0.07880756000758993
+          },
+          "radius_50km": {
+            "p50_ms": 20.806854000056774,
+            "p95_ms": 23.123412000018106,
+            "mean_ms": 10.94511096000815
+          },
+          "knn_10": {
+            "p50_ms": 0.2156760000389113,
+            "p95_ms": 0.3739320000022417,
+            "mean_ms": 0.2313037000192253
+          },
+          "polygon": {
+            "p50_ms": 19.58640199995898,
+            "p95_ms": 20.52484699993329,
+            "mean_ms": 19.67403519997788
+          },
+          "correct": true
+        }
+      ],
+      "seconds": 25.456238810999935
+    },
+    "E3": {
+      "n": 50000,
+      "query": "radius 50 km",
+      "rows": [
+        {
+          "workers": 1,
+          "partitions": 4,
+          "modeled_time_s": 0.24257079899985,
+          "speedup": 1.0,
+          "efficiency": 1.0,
+          "partitions_touched": 1.1,
+          "messages_per_query": 2.2,
+          "max_node_share": 1.0,
+          "correct": true
+        },
+        {
+          "workers": 2,
+          "partitions": 8,
+          "modeled_time_s": 0.18591878800009454,
+          "speedup": 1.304713749530933,
+          "efficiency": 0.6523568747654666,
+          "partitions_touched": 1.42,
+          "messages_per_query": 2.84,
+          "max_node_share": 0.5,
+          "correct": true
+        },
+        {
+          "workers": 4,
+          "partitions": 16,
+          "modeled_time_s": 0.12492653700019218,
+          "speedup": 1.9417075412846578,
+          "efficiency": 0.48542688532116446,
+          "partitions_touched": 2.0,
+          "messages_per_query": 4.0,
+          "max_node_share": 0.25297,
+          "correct": true
+        },
+        {
+          "workers": 8,
+          "partitions": 32,
+          "modeled_time_s": 0.08266108099996927,
+          "speedup": 2.934522462873915,
+          "efficiency": 0.3668153078592394,
+          "partitions_touched": 2.88,
+          "messages_per_query": 5.76,
+          "max_node_share": 0.13342,
+          "correct": true
+        }
+      ],
+      "seconds": 6.120869507999942
+    },
+    "E4": {
+      "rows": [
+        {
+          "offered_rate": 100,
+          "achieved_ingest_per_s": 100.14388768919659,
+          "produce_s": 1.9901755050000247,
+          "drain_s": 1.9971263810000437,
+          "stored": 200,
+          "dropped": 0,
+          "max_backlog": 1,
+          "e2e_p50_ms": 0.37039200003619044,
+          "e2e_p99_ms": 0.7252280000784594,
+          "query_under_load": {
+            "p50_ms": 0.0383670000019265,
+            "p95_ms": 0.09664699996392301,
+            "mean_ms": 0.04826547692515212
+          },
+          "correct": true
+        },
+        {
+          "offered_rate": 1000,
+          "achieved_ingest_per_s": 997.1651343105584,
+          "produce_s": 1.9992198229999758,
+          "drain_s": 2.0056858499999635,
+          "stored": 2000,
+          "dropped": 0,
+          "max_backlog": 4,
+          "e2e_p50_ms": 0.3319730000157506,
+          "e2e_p99_ms": 0.6908930000690816,
+          "query_under_load": {
+            "p50_ms": 0.04308500001570792,
+            "p95_ms": 0.1455220000252666,
+            "mean_ms": 0.06448611224284052
+          },
+          "correct": true
+        },
+        {
+          "offered_rate": 10000,
+          "achieved_ingest_per_s": 9996.573279643799,
+          "produce_s": 1.999983506000035,
+          "drain_s": 2.0006855789999918,
+          "stored": 20000,
+          "dropped": 0,
+          "max_backlog": 495,
+          "e2e_p50_ms": 0.5872649999218993,
+          "e2e_p99_ms": 10.848079999959737,
+          "query_under_load": {
+            "p50_ms": 0.08889599996564357,
+            "p95_ms": 0.6391299999677358,
+            "mean_ms": 0.2001159462382372
+          },
+          "correct": true
+        }
+      ],
+      "seconds": 6.271732714999985
+    },
+    "E5": {
+      "partitions": 16,
+      "rows": [
+        {
+          "distribution": "uniform",
+          "partitioner": "Grid 10\u00b0",
+          "imbalance_max_over_mean": 1.06176,
+          "largest_partition": 3318,
+          "smallest_partition": 2795,
+          "empty_partitions": 0,
+          "hotspot_query_partitions": 1.0,
+          "hotspot_query_max_partition_rows": 3205.6
+        },
+        {
+          "distribution": "uniform",
+          "partitioner": "KD (adaptive)",
+          "imbalance_max_over_mean": 1.14112,
+          "largest_partition": 3566,
+          "smallest_partition": 2547,
+          "empty_partitions": 0,
+          "hotspot_query_partitions": 1.0,
+          "hotspot_query_max_partition_rows": 3005.4
+        },
+        {
+          "distribution": "hotspot",
+          "partitioner": "Grid 10\u00b0",
+          "imbalance_max_over_mean": 3.0096,
+          "largest_partition": 9405,
+          "smallest_partition": 275,
+          "empty_partitions": 0,
+          "hotspot_query_partitions": 1.0,
+          "hotspot_query_max_partition_rows": 9283.2
+        },
+        {
+          "distribution": "hotspot",
+          "partitioner": "KD (adaptive)",
+          "imbalance_max_over_mean": 1.12,
+          "largest_partition": 3500,
+          "smallest_partition": 2786,
+          "empty_partitions": 0,
+          "hotspot_query_partitions": 3.2,
+          "hotspot_query_max_partition_rows": 3303.4
+        }
+      ],
+      "seconds": 2.7734050789999856
+    },
+    "E6": {
+      "n": 20000,
+      "queries": 50,
+      "rows": [
+        {
+          "method": "GeoMemory spatial-temporal",
+          "precision": 1.0,
+          "recall": 1.0,
+          "latency": {
+            "p50_ms": 0.23407800006225443,
+            "p95_ms": 2.2114980000651485,
+            "mean_ms": 0.5855842599930838
+          }
+        },
+        {
+          "method": "Keyword baseline",
+          "precision": 0.00064,
+          "recall": 0.7286208791208791,
+          "latency": null
+        }
+      ],
+      "seconds": 0.944121799999948
+    }
+  }
+}
