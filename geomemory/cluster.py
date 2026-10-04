@@ -148,6 +148,16 @@ class Cluster:
         hits = self._scatter(pids, lambda s: s.radius_between(center, radius_m, start, end))
         return sorted(hits, key=lambda o: (o.timestamp, o.observation_id))
 
+    def get(self, observation_id: str) -> Observation:
+        for pid in self._all_pids():
+            store = self._live_replica(pid).partitions.get(pid)
+            if store is not None and observation_id in store._obs:
+                return store._obs[observation_id]
+        raise KeyError(observation_id)
+
+    def entity_ids(self) -> list[str]:
+        return sorted(set(self._scatter(self._all_pids(), lambda s: s.entity_ids())))
+
     def entity_history(self, entity_id: str) -> list[Observation]:
         hits = self._scatter(self._all_pids(), lambda s: s.entity_history(entity_id))
         return sorted(hits, key=lambda o: (o.timestamp, o.observation_id))

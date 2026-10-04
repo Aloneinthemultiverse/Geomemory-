@@ -54,6 +54,9 @@ class GeoMemory:
     def get(self, observation_id: str) -> Observation:
         return self._obs[observation_id]
 
+    def entity_ids(self) -> list[str]:
+        return sorted(self._by_entity)
+
     # --- spatial (§12.1-12.3) -------------------------------------------
 
     def radius(self, center: Point, radius_m: float) -> list[Observation]:
