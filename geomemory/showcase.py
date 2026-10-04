@@ -47,23 +47,7 @@ def build_pack(raw_dir: Path, out_dir: Path = PACK_DIR, frac: float = 0.2, seed:
                log=print) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     rng = random.Random(seed)
-    # Week sample: "minute,row,lat_e4,lon_e4,base" lines, delta-coded so xz packs them.
-    rows = []
-    with open(raw_dir / "uber-raw-data-jul14.csv", newline="") as f:
-        for i, r in enumerate(csv.DictReader(f)):
-            d = datetime.strptime(r["Date/Time"], "%m/%d/%Y %H:%M:%S")
-            if _WEEK0 <= d < _WEEK0 + timedelta(days=7) and rng.random() < frac:
-                rows.append((int((d - _WEEK0).total_seconds() // 60), i,
-                             round((float(r["Lat"]) - _LAT0) * 1e4),
-                             round((float(r["Lon"]) - _LON0) * 1e4), _BASES.index(r["Base"])))
-    rows.sort()
-    lines, pm, pi = [], 0, 0
-    for m, i, la, lo, b in rows:
-        lines.append(f"{m - pm},{i - pi},{la},{lo},{b}")
-        pm, pi = m, i
-    WEEK = out_dir / WEEK_FILE.name
-    WEEK.write_bytes(lzma.compress("\n".join(lines).encode(), preset=9 | lzma.PRESET_EXTREME))
-    log(f"{WEEK.name}: {len(rows):,} pickups, {WEEK.stat().st_size:,} bytes")
+    build_week(raw_dir / "uber-raw-data-jul14.csv", out_dir / WEEK_FILE.name, frac, seed, log)
 
     # Replay grid: every pickup, counted per cell and local hour of the week.
     grid: dict[tuple[int, int], list[int]] = defaultdict(lambda: [0] * 168)
@@ -95,10 +79,50 @@ def build_pack(raw_dir: Path, out_dir: Path = PACK_DIR, frac: float = 0.2, seed:
     log(f"{REPLAY.name}: {len(cells):,} cells, {REPLAY.stat().st_size:,} bytes")
 
 
+def build_week(raw_csv: Path, out: Path, frac: float = 0.2, seed: int = 7, log=print) -> None:
+    """Sample July 1-7 2014 from the raw July CSV: "minute,row,lat,lon,base"
+    lines, delta-coded so xz packs them. Deterministic for a given seed."""
+    rng = random.Random(seed)
+    days = tuple(f'"7/{d}/2014 ' for d in range(1, 8))
+    rows = []
+    with open(raw_csv, newline="") as f:
+        next(f)
+        for i, line in enumerate(f):
+            if not line.startswith(days) or rng.random() >= frac:
+                continue
+            ts, lat, lon, base = next(csv.reader([line]))
+            d = datetime.strptime(ts, "%m/%d/%Y %H:%M:%S")
+            rows.append((int((d - _WEEK0).total_seconds() // 60), i,
+                         round((float(lat) - _LAT0) * 1e4), round((float(lon) - _LON0) * 1e4),
+                         _BASES.index(base)))
+    rows.sort()
+    lines, pm, pi = [], 0, 0
+    for m, i, la, lo, b in rows:
+        lines.append(f"{m - pm},{i - pi},{la},{lo},{b}")
+        pm, pi = m, i
+    out.write_bytes(lzma.compress("\n".join(lines).encode(), preset=9 | lzma.PRESET_EXTREME))
+    log(f"{out.name}: {len(rows):,} pickups, {out.stat().st_size:,} bytes")
+
+
+def fetch_week(out: Path = WEEK_FILE, log=print) -> None:
+    """Rebuild the week sample from the public July 2014 CSV (37 MB). Used
+    where the pack is not shipped, e.g. the size-limited Vercel bundle."""
+    import tempfile
+    from .datasets import SOURCES
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as d:
+        raw = Path(d) / "jul14.csv"
+        log("downloading the July 2014 Uber pickups ...")
+        urllib.request.urlretrieve(SOURCES["uber-raw-data-jul14.csv"], raw)
+        build_week(raw, out, log=log)
+
+
 def load_week(path: Path = WEEK_FILE) -> Iterator[Observation]:
     """The committed Independence Day week sample, as observations with the
     same ids as the full dataset (``uber_jul14_<row>``)."""
     from .datasets import UBER_BASES
+    if not path.exists():
+        fetch_week(path)
     m = i = 0
     for line in lzma.decompress(path.read_bytes()).decode().splitlines():
         dm, di, la, lo, b = map(int, line.split(","))
