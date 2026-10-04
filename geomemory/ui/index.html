@@ -506,10 +506,10 @@ function setCenter(lat, lon) { st.lat = lat; st.lon = lon; $("#lat").value = lat
 
 /* ---------- map ---------- */
 function mapStyle() {
-  const v = dark() ? "dark_all" : "light_all";
+  const v = dark() ? "Dark" : "Light";
   return {version: 8, sources: {base: {type: "raster", tileSize: 256,
-    tiles: ["a", "b", "c", "d"].map(s => `https://${s}.basemaps.cartocdn.com/${v}/{z}/{x}/{y}@2x.png`),
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>'}},
+    tiles: [`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${v}_Gray_Base/MapServer/tile/{z}/{y}/{x}`],
+    attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors'}},
     layers: [{id: "bg", type: "background", paint: {"background-color": dark() ? "#0b0f17" : "#eef1f6"}},
              {id: "base", type: "raster", source: "base"}]};
 }

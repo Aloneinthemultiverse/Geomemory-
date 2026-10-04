@@ -48,7 +48,7 @@ The default data works offline from the repo; nothing is downloaded. It combines
 
 To rebuild the NYC pack from the raw data, run `python -m geomemory.showcase build`. With `--dataset uber`, the questions run over 1.8M real pickups instead.
 
-It uses MapLibre with CARTO tiles and deck.gl for the 3D layer (no API keys needed). It has light and dark mode and works on phones.
+It uses MapLibre with Esri gray basemap tiles and deck.gl for the 3D layer (no API keys needed). It has light and dark mode and works on phones.
 
 ## Status: Phases 1–5 done
 
