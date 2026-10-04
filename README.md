@@ -53,6 +53,20 @@ python3 -m geomemory.bench --experiments E2,E5       # run a subset
 
 Latest results: [results/RESULTS.md](results/RESULTS.md).
 
+**Real datasets** (`geomemory/datasets.py`):
+
+```bash
+python3 -m geomemory.datasets download                        # ~200 MB into data/raw/ (git-ignored)
+python3 -m geomemory.bench --dataset uber --scale M --out results/M-uber
+```
+
+| Dataset | Records | Why it is useful |
+|---|---|---|
+| `uber`: NYC Uber pickups, Apr–Sep 2014 (NYC TLC, via FiveThirtyEight) | 4,534,327 | Real GPS points with real hotspots (Manhattan, airports). The 5 dispatch bases act as 5 independent sources. |
+| `quakes`: significant earthquakes, 1965–2016 (USGS) | 23,412 | Worldwide, including the ±180° line and polar regions, over 50 years |
+
+Query sizes adapt to each dataset: 500 m is local in Manhattan, while 100 km is local for earthquakes.
+
 ## Tests
 
 ```bash

@@ -107,6 +107,7 @@ TOOLS: list[dict] = [
                                    "start": {"type": "string", "format": "date-time"},
                                    "end": {"type": "string", "format": "date-time"},
                                    "event_type": {"type": "string"},
+                                   "source_id": {"type": "string"},
                                    "min_confidence": {"type": "number"},
                                    "limit": {"type": "integer"}}}},
     {"name": "what_changed",
@@ -171,9 +172,11 @@ class AgentInterface:
         c, r = _point(args), _num(args, "radius_m", 0, 2.1e7)
         start, end = _window(args)
         etype = _str(args, "event_type", required=False)
+        source = _str(args, "source_id", required=False)
         minc = _num(args, "min_confidence", 0, 1, default=0.0)
         hits = [o for o in self.mem.radius_between(c, r, start, end)
-                if (etype is None or o.event_type == etype) and o.confidence >= minc]
+                if (etype is None or o.event_type == etype)
+                and (source is None or o.source_id == source) and o.confidence >= minc]
         return _bundle(hits, _limit(args))
 
     def what_changed(self, args: dict) -> dict:
@@ -334,7 +337,9 @@ def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
                             data = json.loads(f.read_text())
                         except (OSError, ValueError):
                             continue
-                        runs[data.get("scale", f.parent.name)] = data
+                        ds = data.get("dataset", "synthetic")
+                        key = data.get("scale", f.parent.name)
+                        runs[key if ds == "synthetic" else f"{key} · {ds}"] = data
                 self._send(200, {"ok": True, "runs": runs})
             else:
                 self._send(404, {"ok": False, "error": "not found"})

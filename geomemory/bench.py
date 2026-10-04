@@ -87,6 +87,65 @@ def make_dataset(n: int, seed: int, dist: str = "mixed", days: float = 365) -> l
     return out
 
 
+@dataclass(frozen=True)
+class Profile:
+    """How queries are sized for a dataset: a 2 km radius is 'local' in a
+    city but meaningless for global earthquakes."""
+    name: str
+    local_r: float
+    radii: tuple[float, float]          # (small, large) for E2
+    batch_radii: tuple[float, ...]      # E3 throughput mix
+    e6_facet: str                       # attribute E6 filters on
+
+
+PROFILES = {
+    "synthetic": Profile("synthetic", 2_000, (500, 50_000), (20_000, 100_000, 300_000), "event_type"),
+    "uber": Profile("uber", 500, (200, 5_000), (1_000, 3_000, 10_000), "source_id"),
+    "quakes": Profile("quakes", 100_000, (50_000, 500_000), (200_000, 1_000_000, 3_000_000),
+                      "event_type"),
+}
+_active = {"dataset": "synthetic", "cache": {}}
+
+
+def profile() -> Profile:
+    return PROFILES[_active["dataset"]]
+
+
+def get_data(n: int, seed: int, dist: str = "mixed") -> list[Observation]:
+    """Synthetic data, or the first n records of a real dataset (cached)."""
+    name = _active["dataset"]
+    if name == "synthetic":
+        return make_dataset(n, seed, dist)
+    from .datasets import LOADERS
+    cache = _active["cache"]
+    if name not in cache or len(cache[name]) < n:
+        cache[name] = list(LOADERS[name](limit=n))
+    return cache[name][:n]
+
+
+def get_queries(n: int, seed: int, data: list[Observation] | None = None) -> list[Point]:
+    """Synthetic: hotspots and anywhere. Real: near real records, so queries
+    land where the data is, as a user's would."""
+    if _active["dataset"] == "synthetic" or not data:
+        return query_points(n, seed)
+    rng = random.Random(seed)
+    j = profile().local_r / 111_000
+    return [Point(min(90, max(-90, o.location.lat + rng.gauss(0, j))),
+                  (o.location.lon + rng.gauss(0, j) + 180) % 360 - 180)
+            for o in (rng.choice(data) for _ in range(n))]
+
+
+def hot_points(data: list[Observation], k: int = 5) -> list[Point]:
+    if _active["dataset"] == "synthetic":
+        return [Point(la, lo) for la, lo in HOTSPOTS]
+    cells = {}
+    cell = profile().local_r / 111_000 * 4
+    for o in data:
+        key = (round(o.location.lat / cell), round(o.location.lon / cell))
+        cells.setdefault(key, [0, o.location])[0] += 1
+    return [v[1] for v in sorted(cells.values(), key=lambda v: -v[0])[:k]]
+
+
 def query_points(n: int, seed: int) -> list[Point]:
     """Half the queries hit hotspots, half land anywhere."""
     rng = random.Random(seed)
@@ -136,21 +195,25 @@ def brute(points: list[Observation], c: Point, r: float) -> set[str]:
 def e1_scaling(sc: Scale, seed: int) -> dict:
     rows = []
     for n in sc.e1_sizes:
-        data = make_dataset(n, seed)
+        data = get_data(n, seed)
+        R = profile().local_r
         gm = GeoMemory(QuadTreeIndex())
         ingest_s, _ = timed(lambda: gm.ingest_many(data))
-        qs = query_points(sc.queries, seed + 1)
-        radius = [timed(lambda c=c: gm.radius(c, 2_000))[0] for c in qs]
-        window = [timed(lambda i=i: gm.between(T0 + timedelta(days=i % 300),
-                                              T0 + timedelta(days=i % 300 + 1)))[0]
-                  for i in range(sc.queries)]
-        st = [timed(lambda c=c: gm.radius_between(c, 2_000, T0 + timedelta(days=100),
-                                                 T0 + timedelta(days=130)))[0] for c in qs]
+        qs = get_queries(sc.queries, seed + 1, data)
+        t_lo = min(o.timestamp for o in data)
+        span_days = max(1.0, (max(o.timestamp for o in data) - t_lo).total_seconds() / 86400)
+        radius = [timed(lambda c=c: gm.radius(c, R))[0] for c in qs]
+        window = [timed(lambda i=i: gm.between(
+            t_lo + timedelta(days=(i * 7) % span_days),
+            t_lo + timedelta(days=(i * 7) % span_days + 1)))[0] for i in range(sc.queries)]
+        st = [timed(lambda c=c: gm.radius_between(c, R, t_lo + timedelta(days=span_days * .3),
+                                                 t_lo + timedelta(days=span_days * .4)))[0]
+              for c in qs]
         mem = peak_memory_mb(lambda: GeoMemory(QuadTreeIndex()).ingest_many(data)) \
             if n <= 200_000 else None
-        ok = all({o.observation_id for o in gm.radius(c, 2_000)} == brute(data, c, 2_000)
+        ok = all({o.observation_id for o in gm.radius(c, R)} == brute(data, c, R)
                  for c in qs[:3])
-        rows.append({"n": n, "ingest_per_s": n / ingest_s,
+        rows.append({"n": n, "ingest_per_s": n / ingest_s, "radius_m": R,
                      "radius_2km": latency_stats(radius), "time_1day": latency_stats(window),
                      "spatiotemporal": latency_stats(st),
                      "memory_mb": mem, "bytes_per_obs": mem * 2**20 / n if mem else None,
@@ -170,25 +233,29 @@ INDEXES = {
 
 
 def e2_indexes(sc: Scale, seed: int) -> dict:
-    data = make_dataset(sc.e2_size, seed)
-    qs = query_points(sc.queries, seed + 2)
-    truth = {r: [brute(data, c, r) for c in qs[:5]] for r in (500, 50_000)}
-    ring = [Point(10.9, 75.9), Point(10.9, 76.1), Point(11.1, 76.1), Point(11.1, 75.9)]
+    data = get_data(sc.e2_size, seed)
+    qs = get_queries(sc.queries, seed + 2, data)
+    small, large = profile().radii
+    truth = {r: [brute(data, c, r) for c in qs[:5]] for r in (small, large)}
+    hc = hot_points(data, 1)[0]
+    d = large / 111_000
+    ring = [Point(hc.lat - d, hc.lon - d), Point(hc.lat - d, hc.lon + d),
+            Point(hc.lat + d, hc.lon + d), Point(hc.lat + d, hc.lon - d)]
     rows = []
     for name, factory in INDEXES.items():
         gm = GeoMemory(factory())
         build_s, _ = timed(lambda: gm.ingest_many(data))
         lat = {r: latency_stats([timed(lambda c=c: gm.radius(c, r))[0] for c in qs])
-               for r in (500, 50_000)}
+               for r in (small, large)}
         knn = latency_stats([timed(lambda c=c: gm.nearest(c, 10))[0] for c in qs[:20]])
         poly = latency_stats([timed(lambda: gm.within_polygon(ring))[0] for _ in range(5)])
         ok = all({o.observation_id for o in gm.radius(c, r)} == t
                  for r, ts in truth.items() for c, t in zip(qs, ts))
         mem = peak_memory_mb(lambda: _build_index(factory, data))
         rows.append({"index": name, "build_s": build_s, "index_memory_mb": mem,
-                     "radius_500m": lat[500], "radius_50km": lat[50_000], "knn_10": knn,
+                     "radius_500m": lat[small], "radius_50km": lat[large], "knn_10": knn,
                      "polygon": poly, "correct": ok})
-    return {"n": len(data), "rows": rows}
+    return {"n": len(data), "radii_m": [small, large], "rows": rows}
 
 
 def _build_index(factory, data):
@@ -205,9 +272,10 @@ def e3_processes(sc: Scale, seed: int) -> dict:
     fanned out to all of them, wall-clock timed (spec §18.7)."""
     import os
     from .procluster import ProcessCluster
-    data = make_dataset(sc.e3_size, seed)
+    data = get_data(sc.e3_size, seed)
     rng = random.Random(seed + 33)
-    qs = [(c, rng.choice([20_000, 100_000, 300_000])) for c in query_points(sc.e3_batch, seed + 3)]
+    qs = [(c, rng.choice(profile().batch_radii))
+          for c in get_queries(sc.e3_batch, seed + 3, data)]
     sample = [o.location for o in random.Random(seed).sample(data, min(2000, len(data)))]
     truth = [brute(data, c, r) for c, r in qs[:5]]
     rows, t1 = [], None
@@ -231,8 +299,9 @@ def e3_distributed(sc: Scale, seed: int) -> dict:
     """The cluster is simulated in one process, so wall-clock speedup is not
     meaningful. We instead time each partition's share of every query and
     model the parallel time as the slowest node (critical path)."""
-    data = make_dataset(sc.e3_size, seed)
-    qs = query_points(sc.queries, seed + 3)
+    data = get_data(sc.e3_size, seed)
+    qs = get_queries(sc.queries, seed + 3, data)
+    R3 = profile().radii[1]
     sample = [o.location for o in random.Random(seed).sample(data, min(2000, len(data)))]
     rows = []
     t1 = None
@@ -243,19 +312,19 @@ def e3_distributed(sc: Scale, seed: int) -> dict:
         serial, critical, touched = [], [], []
         for q in qs:
             per_node = [0.0] * n
-            pids = c.partitioner.partitions_for_bbox(_box(q, 50_000))
+            pids = c.partitioner.partitions_for_bbox(_box(q, R3))
             touched.append(len(pids))
             for pid in pids:
                 node = c._live_replica(pid)
                 store = node.partitions.get(pid)
                 if store is None:
                     continue
-                dt, _ = timed(lambda s=store: s.radius(q, 50_000))
+                dt, _ = timed(lambda s=store: s.radius(q, R3))
                 per_node[node.node_id] += dt
             serial.append(sum(per_node))
             critical.append(max(per_node))
         msgs = 2 * statistics.fmean(touched)  # one request + one reply per partition
-        ok = all({o.observation_id for o in c.radius(q, 50_000)} == brute(data, q, 50_000)
+        ok = all({o.observation_id for o in c.radius(q, R3)} == brute(data, q, R3)
                  for q in qs[:3])
         total = sum(critical)
         t1 = t1 or sum(serial)
@@ -266,7 +335,7 @@ def e3_distributed(sc: Scale, seed: int) -> dict:
                      "partitions_touched": statistics.fmean(touched),
                      "messages_per_query": msgs,
                      "max_node_share": max(loads) / sum(loads), "correct": ok})
-    return {"n": len(data), "query": "radius 50 km", "rows": rows}
+    return {"n": len(data), "query": f"radius {R3 / 1000:g} km", "rows": rows}
 
 
 def _box(c: Point, r: float):
@@ -282,7 +351,7 @@ def e4_streaming(sc: Scale, seed: int) -> dict:
     rows = []
     for rate in sc.e4_rates:
         n = max(1, int(rate * sc.e4_seconds))
-        data = make_dataset(n, seed + rate)
+        data = get_data(n, seed + rate)
         broker = Broker(4, max_backlog=50_000)
         gm = GeoMemory(QuadTreeIndex())
         proc = StreamProcessor(broker, gm, batch_size=500)
@@ -296,10 +365,10 @@ def e4_streaming(sc: Scale, seed: int) -> dict:
                     time.sleep(0.0005)
 
         def query_load():
-            qs = query_points(1000, seed)
+            qs = get_queries(1000, seed, data)
             i = 0
             while not done.is_set():
-                q_lat.append(timed(lambda: gm.radius(qs[i % len(qs)], 2_000))[0])
+                q_lat.append(timed(lambda: gm.radius(qs[i % len(qs)], profile().local_r))[0])
                 i += 1
                 time.sleep(0.01)
 
@@ -342,19 +411,29 @@ def _raw(o: Observation) -> dict:
 
 def e5_skew(sc: Scale, seed: int, n_parts: int = 16) -> dict:
     rows = []
-    for dist in ("uniform", "hotspot"):
-        data = make_dataset(sc.e5_size, seed, dist)
+    real = _active["dataset"] != "synthetic"
+    for dist in (("real",) if real else ("uniform", "hotspot")):
+        data = get_data(sc.e5_size, seed, dist if not real else "mixed")
         sample = [o.location for o in random.Random(seed).sample(data, min(2000, len(data)))]
-        for pname, part in (("Grid 10°", GridPartitioner(n_parts, 10.0)),
+        # A fixed grid sized to the data's extent: 10° worldwide, ~1/4 of the
+        # bounding box for a city, so the grid gets a fair chance.
+        if real:
+            span = max(max(p.lat for p in sample) - min(p.lat for p in sample),
+                       max(p.lon for p in sample) - min(p.lon for p in sample))
+            cell = 10.0 if span > 90 else max(span / 4, 1e-3)
+        else:
+            cell = 10.0
+        hot_q = hot_points(data)
+        RQ = profile().local_r * 2.5
+        for pname, part in ((f"Grid {cell:.3g}°", GridPartitioner(n_parts, cell)),
                             ("KD (adaptive)", KDPartitioner(n_parts, sample))):
             c = Cluster(part, n_parts, 1, index_factory=lambda: GridIndex(0.1))
             c.ingest_many(data)
             sizes = sorted(c.partition_sizes().values())
-            hot_q = [Point(la, lo) for la, lo in HOTSPOTS]
-            touched = [len(part.partitions_for_bbox(_box(q, 5_000))) for q in hot_q]
+            touched = [len(part.partitions_for_bbox(_box(q, RQ))) for q in hot_q]
             cost = []
             for q in hot_q:  # work on the busiest partition a hotspot query hits
-                pids = part.partitions_for_bbox(_box(q, 5_000))
+                pids = part.partitions_for_bbox(_box(q, RQ))
                 cost.append(max(len(c._live_replica(p).partitions.get(p, ())) for p in pids))
             rows.append({"distribution": dist, "partitioner": pname,
                          "imbalance_max_over_mean": c.imbalance(),
@@ -368,30 +447,38 @@ def e5_skew(sc: Scale, seed: int, n_parts: int = 16) -> dict:
 # --- E6: agent retrieval ----------------------------------------------------------
 
 def e6_retrieval(sc: Scale, seed: int) -> dict:
-    data = make_dataset(sc.e6_size, seed, "mixed")
+    data = get_data(sc.e6_size, seed, "mixed")
     gm = GeoMemory(QuadTreeIndex())
     gm.ingest_many(data)
     agent = AgentInterface(gm)
     rng = random.Random(seed + 6)
+    facet = profile().e6_facet  # what the question names: an event type or a source
+    values = sorted({getattr(o, facet) for o in data})
+    t_lo = min(o.timestamp for o in data)
+    span = max(o.timestamp for o in data) - t_lo
+    R = profile().local_r
     geo_p, geo_r, kw_p, kw_r, lat = [], [], [], [], []
-    for _ in range(sc.queries):
-        clat, clon = rng.choice(HOTSPOTS)
-        c = Point(clat + rng.gauss(0, 0.02), clon + rng.gauss(0, 0.02))
-        r = rng.choice([500, 1_000, 5_000])
-        start = T0 + timedelta(days=rng.uniform(0, 330))
-        end = start + timedelta(days=30)
-        etype = rng.choice(EVENTS)
-        relevant = {o.observation_id for o in data if o.event_type == etype
+    queries = get_queries(sc.queries, seed + 6, data)
+    for c in queries:
+        r = rng.choice([R / 2, R, R * 5])
+        start = t_lo + span * rng.uniform(0, 0.9)
+        end = start + span / 10
+        val = rng.choice(values)
+        relevant = {o.observation_id for o in data if getattr(o, facet) == val
                     and start <= o.timestamp <= end and haversine_m(c, o.location) <= r}
         dt, res = timed(lambda: agent.dispatch("events_near", {
             "lat": c.lat, "lon": c.lon, "radius_m": r, "start": start.isoformat(),
-            "end": end.isoformat(), "event_type": etype, "limit": 1000}))
+            "end": end.isoformat(), facet: val, "limit": 1000}))
         lat.append(dt)
-        p, rc = precision_recall([o["observation_id"] for o in res["observations"]], relevant)
+        got = [o["observation_id"] for o in res["observations"]]
+        if res.get("truncated"):  # count everything the tool matched, not just page 1
+            got = [o.observation_id for o in gm.radius_between(c, r, start, end)
+                   if getattr(o, facet) == val]
+        p, rc = precision_recall(got, relevant)
         geo_p.append(p), geo_r.append(rc)
-        p, rc = precision_recall(keyword_baseline(data, [etype], 1000), relevant)
+        p, rc = precision_recall(keyword_baseline(data, [val], 1000), relevant)
         kw_p.append(p), kw_r.append(rc)
-    return {"n": len(data), "queries": sc.queries, "rows": [
+    return {"n": len(data), "queries": sc.queries, "facet": facet, "rows": [
         {"method": "GeoMemory spatial-temporal", "precision": statistics.fmean(geo_p),
          "recall": statistics.fmean(geo_r), "latency": latency_stats(lat)},
         {"method": "Keyword baseline", "precision": statistics.fmean(kw_p),
@@ -422,20 +509,22 @@ def _table(headers, rows) -> str:
 
 def render_markdown(res: dict) -> str:
     md = [f"# GeoMemory benchmark results\n",
-          f"Scale `{res['scale']}`, seed {res['seed']}, Python {res['python']}, "
+          f"Dataset `{res.get('dataset', 'synthetic')}`, scale `{res['scale']}`, seed {res['seed']}, Python {res['python']}, "
           f"{res['machine']}, run {res['started']}.\n",
           "Latencies are milliseconds. \"Correct\" means the answer equals a brute-force scan.\n"]
     e = res["experiments"]
     if "E1" in e:
+        r0 = e["E1"]["rows"][0].get("radius_m", 2000)
         md += ["## E1: dataset scaling (QuadTree index)\n", _table(
-            ["Observations", "Ingest/s", "Radius 2 km p50", "p95", "1-day window p50",
+            ["Observations", "Ingest/s", f"Radius {r0:g} m p50", "p95", "1-day window p50",
              "Place+time p50", "Memory MB", "Bytes/obs", "Correct"],
             [[r["n"], r["ingest_per_s"], r["radius_2km"]["p50_ms"], r["radius_2km"]["p95_ms"],
               r["time_1day"]["p50_ms"], r["spatiotemporal"]["p50_ms"], r["memory_mb"],
               r["bytes_per_obs"], r["correct"]] for r in e["E1"]["rows"]]), ""]
     if "E2" in e:
+        a, b = e["E2"].get("radii_m", [500, 50_000])
         md += [f"## E2: spatial index comparison ({e['E2']['n']:,} observations)\n", _table(
-            ["Index", "Build s", "Index MB", "Radius 500 m p50", "Radius 50 km p50",
+            ["Index", "Build s", "Index MB", f"Radius {a:g} m p50", f"Radius {b:g} m p50",
              "10-NN p50", "Polygon p50", "Correct"],
             [[r["index"], r["build_s"], r["index_memory_mb"], r["radius_500m"]["p50_ms"],
               r["radius_50km"]["p50_ms"], r["knn_10"]["p50_ms"], r["polygon"]["p50_ms"],
@@ -486,10 +575,13 @@ def render_markdown(res: dict) -> str:
 
 
 def run(scale: str = "S", experiments=None, seed: int = 42, out: str | None = None,
-        log: Callable[[str], None] = print) -> dict:
+        log: Callable[[str], None] = print, dataset: str = "synthetic") -> dict:
+    if dataset not in PROFILES:
+        raise ValueError(f"unknown dataset {dataset!r}")
+    _active["dataset"], _active["cache"] = dataset, {}
     sc = SCALES[scale]
     names = experiments or list(EXPERIMENTS)
-    res = {"scale": scale, "seed": seed, "python": platform.python_version(),
+    res = {"scale": scale, "dataset": dataset, "seed": seed, "python": platform.python_version(),
            "machine": platform.machine(), "started": datetime.now(timezone.utc).isoformat(
                timespec="seconds"), "experiments": {}}
     for name in names:
@@ -513,13 +605,15 @@ def main(argv=None) -> None:
     ap.add_argument("--experiments", default=",".join(EXPERIMENTS),
                     help="comma-separated subset, e.g. E1,E2")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--dataset", choices=list(PROFILES), default="synthetic",
+                    help="synthetic, or a real dataset (run `python -m geomemory.datasets download`)")
     ap.add_argument("--out", default="results")
     a = ap.parse_args(argv)
     names = [x.strip().upper() for x in a.experiments.split(",") if x.strip()]
     bad = [x for x in names if x not in EXPERIMENTS]
     if bad:
         ap.error(f"unknown experiments: {bad}")
-    run(a.scale, names, a.seed, a.out)
+    run(a.scale, names, a.seed, a.out, dataset=a.dataset)
 
 
 if __name__ == "__main__":

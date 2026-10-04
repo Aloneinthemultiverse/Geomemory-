@@ -597,15 +597,16 @@ async function loadBench() {
   let r;
   try { r = await api("/api/results"); } catch { r = {runs: {}}; }
   const runs = r.runs || {};
-  const scales = Object.keys(runs).sort((a, b) => ({tiny: 0, S: 1, M: 2}[a] ?? 9) - ({tiny: 0, S: 1, M: 2}[b] ?? 9));
+  const order = k => ({tiny: 0, S: 1, M: 2}[k.split(" ")[0]] ?? 9) + (k.includes("·") ? 0.5 : 0);
+  const scales = Object.keys(runs).sort((a, b) => order(a) - order(b) || a.localeCompare(b));
   if (!scales.length) { $("#benchBody").innerHTML = `<div class="empty">No benchmark results yet.<br>Run <span class="mono">python -m geomemory.bench --scale S</span></div>`; return; }
   benchLoaded = true;
   const pick = scales.includes("M") ? "M" : scales[scales.length - 1];
   $("#benchBody").innerHTML = `<div class="bench-head"><h2>Benchmark results</h2>
-    <div class="seg" id="scaleSeg" style="grid-template-columns:repeat(${scales.length},auto);margin:0">${scales.map(s => `<button data-s="${s}">Scale ${esc(s)}</button>`).join("")}</div>
+    <div class="seg" id="scaleSeg" style="grid-template-columns:repeat(${scales.length},auto);margin:0">${scales.map(s => `<button data-s="${esc(s)}">${esc(s)}</button>`).join("")}</div>
     <span class="desc" id="benchMeta" style="margin:0"></span></div><div id="benchCards"></div>`;
   $$("#scaleSeg button").forEach(b => b.onclick = () => { $$("#scaleSeg button").forEach(x => x.classList.toggle("on", x === b)); renderBench(runs[b.dataset.s]); });
-  $(`#scaleSeg button[data-s="${pick}"]`).click();
+  $$("#scaleSeg button").find(b => b.dataset.s === pick).click();
 }
 function table(cols, rows) {
   return `<div class="tablewrap"><table><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${esc(c.h)}</th>`).join("")}</tr></thead><tbody>${
@@ -617,18 +618,18 @@ function bars(items, unit, d = 2, lowerBetter = true) {
 }
 function renderBench(run) {
   const e = run.experiments, out = [];
-  $("#benchMeta").textContent = `seed ${run.seed} · Python ${run.python} · ${run.started}`;
+  $("#benchMeta").textContent = `${run.dataset && run.dataset !== "synthetic" ? "real data: " + run.dataset + " · " : ""}seed ${run.seed} · Python ${run.python} · ${run.started}`;
   const card = (t, q, body) => `<div class="card"><h3>${t}</h3><p class="q">${q}</p>${body}</div>`;
   if (e.E1) out.push(card("E1 · Dataset scaling", "How does performance change with data volume?", table([
     {h: "Observations", n: 1, f: r => fmtNum(r.n, 0)}, {h: "Ingest / s", n: 1, f: r => fmtNum(r.ingest_per_s, 0)},
-    {h: "Radius 2 km p50 ms", n: 1, f: r => fmtNum(r.radius_2km.p50_ms, 3)}, {h: "p95 ms", n: 1, f: r => fmtNum(r.radius_2km.p95_ms, 3)},
+    {h: `Radius ${fmtM(e.E1.rows[0].radius_m || 2000)} p50 ms`, n: 1, f: r => fmtNum(r.radius_2km.p50_ms, 3)}, {h: "p95 ms", n: 1, f: r => fmtNum(r.radius_2km.p95_ms, 3)},
     {h: "Place + time p50 ms", n: 1, f: r => fmtNum(r.spatiotemporal.p50_ms, 3)},
     {h: "Bytes / obs", n: 1, f: r => fmtNum(r.bytes_per_obs, 0)}, {h: "Correct", f: r => r.correct}], e.E1.rows)));
   if (e.E2) out.push(card(`E2 · Spatial index comparison (${fmtNum(e.E2.n, 0)} obs)`, "Which index is fastest for which query? Lower is better.",
-    `<div class="grid2"><div><h3 style="font-size:13px">Radius 500 m, p50 ms</h3>${bars(e.E2.rows.map(r => ({k: r.index, v: r.radius_500m.p50_ms})), "", 3)}</div>
+    `<div class="grid2"><div><h3 style="font-size:13px">Radius ${fmtM((e.E2.radii_m || [500])[0])}, p50 ms</h3>${bars(e.E2.rows.map(r => ({k: r.index, v: r.radius_500m.p50_ms})), "", 3)}</div>
      <div><h3 style="font-size:13px">10 nearest, p50 ms</h3>${bars(e.E2.rows.map(r => ({k: r.index, v: r.knn_10.p50_ms})), "", 3)}</div></div><br>` +
     table([{h: "Index", f: r => esc(r.index)}, {h: "Build s", n: 1, f: r => fmtNum(r.build_s)}, {h: "Index MB", n: 1, f: r => fmtNum(r.index_memory_mb, 1)},
-      {h: "Radius 50 km p50", n: 1, f: r => fmtNum(r.radius_50km.p50_ms, 2)}, {h: "Polygon p50", n: 1, f: r => fmtNum(r.polygon.p50_ms, 2)},
+      {h: `Radius ${fmtM((e.E2.radii_m || [0, 50000])[1])} p50`, n: 1, f: r => fmtNum(r.radius_50km.p50_ms, 2)}, {h: "Polygon p50", n: 1, f: r => fmtNum(r.polygon.p50_ms, 2)},
       {h: "Correct", f: r => r.correct}], e.E2.rows)));
   if (e.E3) {
     const real = e.E3.rows[0]?.wall_s != null;
