@@ -47,14 +47,16 @@ class Scale:
     e5_size: int
     e6_size: int
     queries: int
+    e3_batch: int = 2000
 
 
 SCALES = {
-    "tiny": Scale("tiny", (500, 2_000), 2_000, 2_000, (1, 2, 4), (100, 1_000), 0.3, 2_000, 2_000, 10),
+    "tiny": Scale("tiny", (500, 2_000), 2_000, 2_000, (1, 2, 4), (100, 1_000), 0.3, 2_000, 2_000, 10,
+                 e3_batch=100),
     "S": Scale("S", (10_000, 100_000), 100_000, 50_000, (1, 2, 4, 8), (100, 1_000, 10_000), 2.0,
                50_000, 20_000, 50),
     "M": Scale("M", (10_000, 100_000, 1_000_000), 1_000_000, 200_000, (1, 2, 4, 8),
-               (100, 1_000, 10_000), 5.0, 200_000, 100_000, 100),
+               (100, 1_000, 10_000), 5.0, 200_000, 100_000, 100, e3_batch=5000),
 }
 
 
@@ -197,6 +199,33 @@ def _build_index(factory, data):
 
 
 # --- E3: distributed scaling ----------------------------------------------------
+
+def e3_processes(sc: Scale, seed: int) -> dict:
+    """Real parallelism: one OS process per worker, a batch of radius queries
+    fanned out to all of them, wall-clock timed (spec §18.7)."""
+    import os
+    from .procluster import ProcessCluster
+    data = make_dataset(sc.e3_size, seed)
+    rng = random.Random(seed + 33)
+    qs = [(c, rng.choice([20_000, 100_000, 300_000])) for c in query_points(sc.e3_batch, seed + 3)]
+    sample = [o.location for o in random.Random(seed).sample(data, min(2000, len(data)))]
+    truth = [brute(data, c, r) for c, r in qs[:5]]
+    rows, t1 = [], None
+    for n in sc.e3_nodes:
+        with ProcessCluster(KDPartitioner(n * 4, sample), n) as pc:
+            ingest_s, _ = timed(lambda: pc.ingest_many(data))
+            pc.radius_batch(qs[:10])  # warm-up
+            runs = [timed(lambda: pc.radius_batch(qs))[0] for _ in range(3)]
+            wall = min(runs)
+            ok = pc.radius_batch(qs[:5]) == truth
+            sizes = list(pc.partition_sizes().values())
+        t1 = t1 or wall
+        rows.append({"workers": n, "wall_s": wall, "queries_per_s": len(qs) / wall,
+                     "speedup": t1 / wall, "efficiency": t1 / wall / n,
+                     "ingest_per_s": len(data) / ingest_s,
+                     "imbalance": max(sizes) / (sum(sizes) / len(sizes)), "correct": ok})
+    return {"n": len(data), "queries": len(qs), "cpus": os.cpu_count(), "rows": rows}
+
 
 def e3_distributed(sc: Scale, seed: int) -> dict:
     """The cluster is simulated in one process, so wall-clock speedup is not
@@ -369,7 +398,7 @@ def e6_retrieval(sc: Scale, seed: int) -> dict:
          "recall": statistics.fmean(kw_r), "latency": None}]}
 
 
-EXPERIMENTS = {"E1": e1_scaling, "E2": e2_indexes, "E3": e3_distributed,
+EXPERIMENTS = {"E1": e1_scaling, "E2": e2_indexes, "E3": e3_processes, "E3M": e3_distributed,
                "E4": e4_streaming, "E5": e5_skew, "E6": e6_retrieval}
 
 
@@ -412,13 +441,25 @@ def render_markdown(res: dict) -> str:
               r["radius_50km"]["p50_ms"], r["knn_10"]["p50_ms"], r["polygon"]["p50_ms"],
               r["correct"]] for r in e["E2"]["rows"]]), ""]
     if "E3" in e:
-        md += [f"## E3: distributed scaling ({e['E3']['n']:,} observations, {e['E3']['query']})\n",
+        x = e["E3"]
+        md += [f"## E3: distributed scaling, real processes ({x['n']:,} observations, "
+               f"batch of {x['queries']:,} radius queries, {x['cpus']} CPU cores)\n",
+               "Each worker is a separate OS process. Wall-clock time, best of 3. Rows with more "
+               "workers than cores are oversubscribed and cannot speed up further.\n",
+               _table(["Workers", "Wall s", "Queries/s", "Speedup", "Efficiency", "Ingest/s",
+                       "Partition imbalance", "Correct"],
+                      [[r["workers"], r["wall_s"], r["queries_per_s"], r["speedup"],
+                        r["efficiency"], r["ingest_per_s"], r["imbalance"], r["correct"]]
+                       for r in x["rows"]]), ""]
+    if "E3M" in e:
+        md += [f"## E3M: distributed scaling, modeled ({e['E3M']['n']:,} observations, "
+               f"{e['E3M']['query']})\n",
                "Simulated in one process: time is *modeled* as the slowest node per query.\n",
                _table(["Workers", "Partitions", "Modeled time s", "Speedup", "Efficiency",
                        "Partitions touched", "Messages/query", "Max node share", "Correct"],
                       [[r["workers"], r["partitions"], r["modeled_time_s"], r["speedup"],
                         r["efficiency"], r["partitions_touched"], r["messages_per_query"],
-                        r["max_node_share"], r["correct"]] for r in e["E3"]["rows"]]), ""]
+                        r["max_node_share"], r["correct"]] for r in e["E3M"]["rows"]]), ""]
     if "E4" in e:
         md += ["## E4: streaming throughput (with concurrent queries)\n", _table(
             ["Offered/s", "Achieved/s", "Stored", "Dropped", "Max backlog", "E2E p50",

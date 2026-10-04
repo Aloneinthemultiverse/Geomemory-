@@ -15,8 +15,8 @@ class BenchTests(unittest.TestCase):
 
     def test_all_experiments_correct(self):
         e = self.res["experiments"]
-        self.assertEqual(sorted(e), ["E1", "E2", "E3", "E4", "E5", "E6"])
-        for name in ("E1", "E2", "E3", "E4"):
+        self.assertEqual(sorted(e), ["E1", "E2", "E3", "E3M", "E4", "E5", "E6"])
+        for name in ("E1", "E2", "E3", "E3M", "E4"):
             for row in e[name]["rows"]:
                 self.assertTrue(row["correct"], (name, row))
 
@@ -25,7 +25,9 @@ class BenchTests(unittest.TestCase):
         self.assertEqual([r["n"] for r in e["E1"]["rows"]], list(bench.SCALES["tiny"].e1_sizes))
         self.assertEqual(len(e["E2"]["rows"]), len(bench.INDEXES))
         self.assertAlmostEqual(e["E3"]["rows"][0]["speedup"], 1.0)
-        for r in e["E3"]["rows"]:
+        self.assertEqual([r["workers"] for r in e["E3"]["rows"]], [1, 2, 4])
+        self.assertAlmostEqual(e["E3M"]["rows"][0]["speedup"], 1.0)
+        for r in e["E3M"]["rows"]:
             self.assertGreaterEqual(r["messages_per_query"], 2)
         geo, kw = e["E6"]["rows"]
         self.assertEqual((geo["precision"], geo["recall"]), (1.0, 1.0))
@@ -38,7 +40,7 @@ class BenchTests(unittest.TestCase):
         d = Path(self.dir)
         self.assertEqual(json.loads((d / "results.json").read_text())["scale"], "tiny")
         md = (d / "RESULTS.md").read_text()
-        for h in ("E1", "E2", "E3", "E4", "E5", "E6"):
+        for h in ("E1", "E2", "E3", "E3M", "E4", "E5", "E6"):
             self.assertIn(f"## {h}", md)
         self.assertNotIn("**NO**", md)
 
