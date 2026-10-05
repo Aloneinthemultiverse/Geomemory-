@@ -17,7 +17,8 @@ api = ["fastapi>=0.110", "uvicorn>=0.29", "httpx>=0.27"]
 postgis = ["psycopg[binary]>=3.1"]
 kafka = ["confluent-kafka>=2.3"]
 spark = ["pyspark==3.5.3", "apache-sedona==1.6.1"]
-all = ["geomemory[api,postgis,kafka,spark]"]
+ai = ["anthropic>=1.0"]
+all = ["geomemory[api,postgis,kafka,spark,ai]"]
 
 [project.scripts]
 geomemory-demo = "geomemory.demo:main"

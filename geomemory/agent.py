@@ -400,6 +400,8 @@ def showcase_call(agent: AgentInterface, path: str, args, cache: dict) -> dict:
     if path.rstrip("/") == "/api/ask":
         q = args.get("question")
         return showcase.ask(agent, q if isinstance(q, str) else "")
+    if path.rstrip("/") == "/api/chat":
+        return showcase.chat(agent, args.get("messages"))
     if path.rstrip("/") == "/api/crash":
         node = args.get("node")
         if node is not None and not isinstance(node, int):
@@ -482,7 +484,7 @@ def serve(agent: AgentInterface, host: str = "127.0.0.1", port: int = 0,
                 self._send(404, {"ok": False, "error": "not found"})
 
         def do_POST(self):
-            if not self.path.startswith(("/tools/", "/api/ask", "/api/crash")):
+            if not self.path.startswith(("/tools/", "/api/ask", "/api/chat", "/api/crash")):
                 return self._send(404, {"ok": False, "error": "not found"})
             try:
                 n = int(self.headers.get("Content-Length", "0"))

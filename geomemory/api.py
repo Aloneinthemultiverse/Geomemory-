@@ -88,6 +88,10 @@ def create_app(agent: AgentInterface, results_dir: str | None = None,
     async def ask_route(request: Request):
         return _json(showcase_call(agent, "/api/ask", await _body(request), cache))
 
+    @app.post("/api/chat", summary="Chat with the GeoMemory agent (Claude when ANTHROPIC_API_KEY is set)")
+    async def chat_route(request: Request):
+        return _json(showcase_call(agent, "/api/chat", await _body(request), cache))
+
     @app.post("/api/crash", summary="Crash test: kill one of 4 servers mid-question")
     async def crash_route(request: Request):
         return _json(showcase_call(agent, "/api/crash", await _body(request), cache))

@@ -326,21 +326,23 @@ def parse_question(q: str, now: datetime | None = None) -> dict:
             "understood": f"how busy {where} was, hour by hour, during {when}"}
 
 
-LLM_MODEL = os.environ.get("GEOMEMORY_LLM_MODEL", "claude-sonnet-4-5")
-_SYSTEM = """You answer questions using GeoMemory, a spatial-temporal memory. Use the tools; never guess numbers.
+LLM_MODEL = os.environ.get("GEOMEMORY_LLM_MODEL", "claude-opus-5-5")
+_SYSTEM = """You are GeoMemory's analyst: a live assistant for a city operations team, answering from a spatial-temporal memory of real events. Use the tools for every number; never guess.
 Data available:
-1. Real NYC Uber pickups, Independence Day week 2014: July 1-7 2014 local time (America/New_York, UTC-4). Tools take UTC ISO times, so 6 pm local on July 4 is 2014-07-04T22:00:00Z. Sources are dispatch bases B02512, B02598, B02617, B02682, B02764.
-2. A small demo world near Coimbatore, India, with recent timestamps: Machine_47 (fails; use history_before), Flood_Event_1 (sources disagree; use fused_location), a factory at 11.0172,76.9566 and a solar farm at 10.9618,77.0518.
-Answer in 2-4 short, plain sentences for a non-expert, with the key numbers. Mention which sources the answer came from."""
+1. Real NYC Uber pickups, Independence Day week 2014: July 1-7 2014 local time (America/New_York, UTC-4). Tools take UTC ISO times, so 6 pm local on July 4 is 2014-07-04T22:00:00Z. Each pickup's source is its dispatch base (B02512, B02598, B02617, B02682, B02764). This is a 20% sample, so say "in the sample" when giving counts.
+   Useful places: Times Square 40.7580,-73.9855; JFK 40.6446,-73.7797; LaGuardia 40.7769,-73.8740; Brooklyn Bridge 40.7061,-73.9969; Grand Central 40.7527,-73.9772; Williamsburg 40.7081,-73.9571; Manhattan centre 40.758,-73.9855 (radius ~7 km).
+2. A small sensor world near Coimbatore, India, with recent timestamps: Machine_47 fails (use history_before); Flood_Event_1 is reported by sources that disagree (use fused_location); a factory at 11.0172,76.9566; a solar farm at 10.9618,77.0518.
+Approach: plan briefly, call several tools when a comparison helps (e.g. two places or two time windows), then answer.
+Answer format: 2-5 short sentences for a non-expert, lead with the conclusion, include the key numbers, and end with one concrete recommendation when the user is making a decision. Mention which sources the answer came from. Use plain text, no markdown headings."""
 
 
 def _llm_call(body: dict, key: str) -> dict:
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(),
-        headers={"x-api-key": key, "anthropic-version": "2023-06-01",
-                 "content-type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.load(r)
+    """One Messages API call through the official SDK (pip install anthropic)."""
+    import anthropic
+    client = anthropic.Anthropic(api_key=key, max_retries=2, timeout=90.0)
+    msg = client.beta.messages.create(betas=["server-side-fallback-2026-07-01"],
+                                      fallbacks="default", **body)
+    return msg.to_dict()
 
 
 def _short(res: dict) -> dict:
@@ -355,16 +357,34 @@ def _short(res: dict) -> dict:
     return out
 
 
-def ask(agent, question: str, key: str | None = None, llm=_llm_call) -> dict:
-    question = (question or "").strip()
-    if not question:
-        return {"ok": False, "error": "Type a question first."}
-    if len(question) > 500:
-        return {"ok": False, "error": "Please keep the question under 500 characters."}
+def _clean_history(messages) -> list[dict] | None:
+    """Chat history from the browser: alternating user/assistant plain-text turns."""
+    if not isinstance(messages, list) or not messages or len(messages) > 40:
+        return None
+    out = []
+    for m in messages:
+        if not isinstance(m, dict) or m.get("role") not in ("user", "assistant"):
+            return None
+        text = m.get("content")
+        if not isinstance(text, str) or not text.strip() or len(text) > 4000:
+            return None
+        out.append({"role": m["role"], "content": text.strip()})
+    if out[0]["role"] != "user" or out[-1]["role"] != "user" or len(out[-1]["content"]) > 500:
+        return None
+    return out
+
+
+def chat(agent, messages, key: str | None = None, llm=None) -> dict:
+    """A multi-turn conversation: Claude plans, calls GeoMemory tools, answers.
+    Without a key (or if the API fails) the built-in reader answers the last message."""
+    history = _clean_history(messages)
+    if history is None:
+        return {"ok": False, "error": "Send a conversation that ends with a question (max 500 characters)."}
     key = key if key is not None else os.environ.get("ANTHROPIC_API_KEY")
+    question = history[-1]["content"]
     if key:
         try:
-            return _ask_llm(agent, question, key, llm)
+            return _chat_llm(agent, history, key, llm or _llm_call)
         except Exception as e:  # network, quota, bad key: fall back, but say so
             out = _ask_rules(agent, question)
             out["note"] = f"The AI model was unavailable ({type(e).__name__}); answered with the built-in reader."
@@ -372,39 +392,62 @@ def ask(agent, question: str, key: str | None = None, llm=_llm_call) -> dict:
     return _ask_rules(agent, question)
 
 
+def ask(agent, question: str, key: str | None = None, llm=None) -> dict:
+    question = (question or "").strip()
+    if not question:
+        return {"ok": False, "error": "Type a question first."}
+    if len(question) > 500:
+        return {"ok": False, "error": "Please keep the question under 500 characters."}
+    return chat(agent, [{"role": "user", "content": question}], key, llm)
+
+
+def _step(name: str, args: dict, res: dict) -> dict:
+    """What the UI shows for one tool call (and draws on the map)."""
+    return {"tool": name, "args": args, "ok": bool(res.get("ok")),
+            "count": res.get("count"), "took_ms": res.get("took_ms"),
+            "searched": res.get("searched"), "error": res.get("error"), "result": res}
+
+
 def _ask_rules(agent, question: str) -> dict:
     p = parse_question(question)
     res = agent.dispatch(p["tool"], p["args"])
     return {"ok": True, "mode": "rules", "question": question, "understood": p["understood"],
-            "tool": p["tool"], "args": p["args"], "result": res, "steps": [p["tool"]]}
+            "tool": p["tool"], "args": p["args"], "result": res,
+            "steps": [_step(p["tool"], p["args"], res)]}
 
 
-def _ask_llm(agent, question: str, key: str, llm) -> dict:
+def _chat_llm(agent, history: list[dict], key: str, llm) -> dict:
     from .agent import TOOLS
     tools = [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
              for t in TOOLS]
-    msgs = [{"role": "user", "content": question}]
-    last = None
-    steps = []
-    for _ in range(6):
-        r = llm({"model": LLM_MODEL, "max_tokens": 1024, "system": _SYSTEM,
-                 "tools": tools, "messages": msgs}, key)
+    msgs = list(history)
+    steps, last = [], None
+    for _ in range(8):
+        r = llm({"model": LLM_MODEL, "max_tokens": 16000, "system": _SYSTEM,
+                 "output_config": {"effort": "low"}, "tools": tools, "messages": msgs}, key)
+        if r.get("stop_reason") == "refusal":
+            raise RuntimeError("the model declined this request")
         msgs.append({"role": "assistant", "content": r["content"]})
         calls = [c for c in r["content"] if c.get("type") == "tool_use"]
         if not calls:
-            text = " ".join(c.get("text", "") for c in r["content"] if c.get("type") == "text").strip()
-            out = {"ok": True, "mode": "llm", "question": question, "answer": text, "steps": steps}
+            text = "\n\n".join(c.get("text", "") for c in r["content"]
+                                if c.get("type") == "text").strip()
+            out = {"ok": True, "mode": "llm", "question": history[-1]["content"],
+                   "answer": text, "steps": steps}
             if last:
-                out.update(tool=last[0], args=last[1], result=last[2])
+                out.update(tool=last["tool"], args=last["args"], result=last["result"])
             return out
         results = []
         for c in calls:
-            res = agent.dispatch(c["name"], c.get("input") or {})
-            steps.append(c["name"])
+            args = c.get("input") if isinstance(c.get("input"), dict) else {}
+            res = agent.dispatch(c["name"], args)
+            step = _step(c["name"], args, res)
+            steps.append(step)
             if c["name"] != "evidence" and res.get("ok"):
-                last = (c["name"], c.get("input") or {}, res)
+                last = step
             results.append({"type": "tool_result", "tool_use_id": c["id"],
-                            "content": json.dumps(_short(res), default=str)[:20000]})
+                            "content": json.dumps(_short(res), default=str)[:20000],
+                            **({} if res.get("ok") else {"is_error": True})})
         msgs.append({"role": "user", "content": results})
     raise RuntimeError("too many tool calls")
 

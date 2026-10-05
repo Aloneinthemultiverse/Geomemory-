@@ -129,6 +129,62 @@ class QuestionTests(unittest.TestCase):
         self.assertTrue(r["result"]["ok"])
 
 
+class ChatTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.agent = AgentInterface(build_memory("showcase"), "showcase")
+
+    def test_history_is_validated(self):
+        bad = [None, [], "hi", [{"role": "assistant", "content": "x"}],
+               [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}],
+               [{"role": "system", "content": "q"}], [{"role": "user", "content": ""}],
+               [{"role": "user", "content": "x" * 501}], [{"role": "user", "content": 5}],
+               [{"role": "user", "content": "q"}] * 41]
+        for h in bad:
+            self.assertFalse(showcase.chat(self.agent, h, key="")["ok"], h)
+
+    def test_follow_up_sends_whole_conversation_and_reports_steps(self):
+        seen = []
+
+        def fake_llm(body, key):
+            seen.append([m for m in body["messages"]])
+            last = body["messages"][-1]
+            if isinstance(last["content"], str):
+                return {"stop_reason": "tool_use", "content": [
+                    {"type": "tool_use", "id": "t1", "name": "hotspots",
+                     "input": {"lat": 40.758, "lon": -73.9855, "radius_m": 7000,
+                               "start": "2014-07-05T22:00:00Z", "end": "2014-07-06T06:00:00Z",
+                               "cell_m": 300}},
+                    {"type": "tool_use", "id": "t2", "name": "nope", "input": {}}]}
+            results = last["content"]
+            self.assertEqual([r["tool_use_id"] for r in results], ["t1", "t2"])
+            self.assertTrue(results[1]["is_error"])
+            return {"stop_reason": "end_turn", "content": [{"type": "text", "text": "Go to the East Village."}]}
+
+        h = [{"role": "user", "content": "Where on Friday night?"},
+             {"role": "assistant", "content": "Mostly downtown."},
+             {"role": "user", "content": "and Saturday?"}]
+        r = showcase.chat(self.agent, h, key="k", llm=fake_llm)
+        self.assertEqual((r["mode"], r["answer"]), ("llm", "Go to the East Village."))
+        self.assertEqual(seen[0][:3], h)                      # history went to the model
+        self.assertEqual([s["tool"] for s in r["steps"]], ["hotspots", "nope"])
+        self.assertTrue(r["steps"][0]["ok"])
+        self.assertGreater(r["steps"][0]["count"], 0)
+        self.assertGreaterEqual(r["steps"][0]["took_ms"], 0)
+        self.assertFalse(r["steps"][1]["ok"])
+        self.assertEqual(r["tool"], "hotspots")
+
+    def test_refusal_falls_back(self):
+        r = showcase.chat(self.agent, [{"role": "user", "content": "Where exactly is the flood?"}], key="k",
+                          llm=lambda b, k: {"stop_reason": "refusal", "content": []})
+        self.assertEqual(r["mode"], "rules")
+        self.assertIn("unavailable", r["note"])
+
+    def test_without_key_uses_reader_with_steps(self):
+        r = showcase.chat(self.agent, [{"role": "user", "content": "How busy was Times Square on July 4th?"}], key="")
+        self.assertEqual((r["mode"], r["steps"][0]["tool"]), ("rules", "activity"))
+
+
 class CrashTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -186,6 +242,10 @@ class RouteTests(unittest.TestCase):
         code, r = self.call("/api/ask", {"question": 5})
         self.assertEqual(code, 400)
         code, r = self.call("/api/ask", [1, 2])
+        self.assertEqual(code, 400)
+        code, r = self.call("/api/chat", {"messages": [{"role": "user", "content": "Why did machine 47 fail?"}]})
+        self.assertEqual((code, r["tool"]), (200, "history_before"))
+        code, r = self.call("/api/chat", {"messages": "nope"})
         self.assertEqual(code, 400)
         code, r = self.call("/api/crash", {"node": 1})
         self.assertEqual((code, r["killed"], r["after"]["identical"]), (200, 1, True))
