@@ -185,6 +185,59 @@ class ChatTests(unittest.TestCase):
         self.assertEqual((r["mode"], r["steps"][0]["tool"]), ("rules", "activity"))
 
 
+class OpenRouterTests(unittest.TestCase):
+    """The OpenRouter adapter speaks OpenAI-style chat completions; the agent loop is unchanged."""
+
+    def test_round_trip_through_the_agent_loop(self):
+        import io
+        import os
+        from unittest import mock
+        agent = AgentInterface(build_memory("showcase"), "showcase")
+        sent = []
+
+        def fake_urlopen(req, timeout=0):
+            body = json.loads(req.data)
+            sent.append(body)
+            self.assertEqual(req.full_url, "https://openrouter.ai/api/v1/chat/completions")
+            self.assertEqual(req.get_header("Authorization"), "Bearer or-key")
+            if len(sent) == 1:
+                self.assertEqual(body["messages"][0]["role"], "system")
+                self.assertEqual(body["messages"][-1], {"role": "user", "content": "Why did machine 47 fail?"})
+                self.assertIn("history_before", [t["function"]["name"] for t in body["tools"]])
+                msg = {"content": None, "tool_calls": [{"id": "c1", "type": "function", "function": {
+                    "name": "history_before",
+                    "arguments": json.dumps({"entity_id": "Machine_47", "event_type": "failure", "lookback_minutes": 60})}}]}
+            else:
+                self.assertEqual(body["messages"][-2]["tool_calls"][0]["id"], "c1")
+                tool = body["messages"][-1]
+                self.assertEqual((tool["role"], tool["tool_call_id"]), ("tool", "c1"))
+                self.assertTrue(json.loads(tool["content"])["ok"])
+                msg = {"content": "It overheated first."}
+            return io.BytesIO(json.dumps({"choices": [{"message": msg}]}).encode())
+
+        env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+        env["OPENROUTER_API_KEY"] = "or-key"
+        with mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch("urllib.request.urlopen", fake_urlopen):
+            r = showcase.chat(agent, [{"role": "user", "content": "Why did machine 47 fail?"}])
+        self.assertEqual(r["mode"], "llm", r.get("note"))
+        self.assertEqual((r["answer"], r["tool"]), ("It overheated first.", "history_before"))
+        self.assertEqual(len(sent), 2)
+
+    def test_error_message_reaches_the_user(self):
+        import os
+        from unittest import mock
+        agent = AgentInterface(build_memory("showcase"), "showcase")
+
+        def boom(req, timeout=0):
+            raise urllib.error.HTTPError(req.full_url, 400, "bad", {}, __import__("io").BytesIO(b'{"error":"no such model"}'))
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "k"}, clear=True), \
+                mock.patch("urllib.request.urlopen", boom):
+            r = showcase.chat(agent, [{"role": "user", "content": "Where exactly is the flood?"}])
+        self.assertEqual(r["mode"], "rules")
+        self.assertIn("no such model", r["note"])
+
+
 class CrashTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -32,7 +32,7 @@ python3 -m geomemory.demo          # open http://127.0.0.1:8765
 
 Press **▶ Take the 60-second tour** for a guided walk-through. Here's what you can do:
 
-- **✨ AI analyst.** A chat assistant powered by Claude (`claude-opus-5-5`). It plans, calls GeoMemory's tools (each step is shown and can be clicked to draw it on the map), answers in plain English with a recommendation, and handles follow-ups. To enable it: `pip install -e ".[ai]"`, then `export ANTHROPIC_API_KEY=...`. Without a key it runs in demo mode with a built-in reader.
+- **✨ AI analyst.** A chat assistant powered by Claude (`claude-opus-5-5`). It plans, calls GeoMemory's tools (each step is shown and can be clicked to draw it on the map), answers in plain English with a recommendation, and handles follow-ups. To enable it: `pip install -e ".[ai]"`, then `export ANTHROPIC_API_KEY=...`, or use OpenRouter with `export OPENROUTER_API_KEY=...` (optionally `OPENROUTER_MODEL`, default `anthropic/claude-sonnet-4.5`). Without a key it runs in demo mode with a built-in reader.
 
 - **Watch NYC breathe.** A 3D time-lapse of a typical week in New York, built from all 4.5M real Uber pickups (Apr–Sep 2014). Each column is a ~650 m block, and its height is the number of rides starting there in that hour. Press play, or jump to Monday rush hour or Friday night.
 - **Ask in plain English.** For example, "How busy was Times Square on July 4th?" or "Which companies picked people up at JFK over the weekend?". Every answer shows the original records behind it, and clicking one shows where it came from.

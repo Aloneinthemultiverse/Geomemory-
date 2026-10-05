@@ -22,6 +22,7 @@ import os
 import random
 import re
 import time
+import urllib.error
 import urllib.request
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -345,6 +346,62 @@ def _llm_call(body: dict, key: str) -> dict:
     return msg.to_dict()
 
 
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5")
+
+
+def _openrouter_call(body: dict, key: str) -> dict:
+    """The same request through OpenRouter (OpenAI-style chat completions),
+    translated to and from the Messages shape the agent loop uses."""
+    msgs = [{"role": "system", "content": body["system"]}]
+    for m in body["messages"]:
+        c = m["content"]
+        if isinstance(c, str):
+            msgs.append({"role": m["role"], "content": c})
+        elif m["role"] == "assistant":
+            text = "".join(b.get("text", "") for b in c if b.get("type") == "text")
+            calls = [{"id": b["id"], "type": "function",
+                      "function": {"name": b["name"], "arguments": json.dumps(b.get("input") or {})}}
+                     for b in c if b.get("type") == "tool_use"]
+            msgs.append({"role": "assistant", "content": text or None, **({"tool_calls": calls} if calls else {})})
+        else:
+            msgs += [{"role": "tool", "tool_call_id": b["tool_use_id"], "content": b["content"]}
+                     for b in c if b.get("type") == "tool_result"]
+    req = {"model": OPENROUTER_MODEL, "max_tokens": 4000, "messages": msgs,
+           "tools": [{"type": "function", "function": {"name": t["name"], "description": t["description"],
+                                                        "parameters": t["input_schema"]}} for t in body["tools"]]}
+    r = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", data=json.dumps(req).encode(),
+                               headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                                        "X-Title": "GeoMemory"})
+    try:
+        with urllib.request.urlopen(r, timeout=90) as f:
+            out = json.load(f)
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"OpenRouter {e.code}: {e.read().decode(errors='replace')[:300]}") from None
+    if "error" in out:
+        raise RuntimeError(f"OpenRouter: {out['error'].get('message', out['error'])}")
+    msg = out["choices"][0]["message"]
+    content = [{"type": "text", "text": msg["content"]}] if msg.get("content") else []
+    for tc in msg.get("tool_calls") or []:
+        try:
+            args = json.loads(tc["function"].get("arguments") or "{}")
+        except ValueError:
+            args = {}
+        content.append({"type": "tool_use", "id": tc["id"], "name": tc["function"]["name"], "input": args})
+    return {"stop_reason": "tool_use" if any(b["type"] == "tool_use" for b in content) else "end_turn",
+            "content": content}
+
+
+def _provider(key: str | None):
+    """(key, call) for the configured LLM: Anthropic first, then OpenRouter."""
+    if key is not None:
+        return key, None
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return os.environ["ANTHROPIC_API_KEY"], None
+    if os.environ.get("OPENROUTER_API_KEY"):
+        return os.environ["OPENROUTER_API_KEY"], _openrouter_call
+    return None, None
+
+
 def _short(res: dict) -> dict:
     """Trim a tool result before showing it to the LLM."""
     out = dict(res)
@@ -380,14 +437,15 @@ def chat(agent, messages, key: str | None = None, llm=None) -> dict:
     history = _clean_history(messages)
     if history is None:
         return {"ok": False, "error": "Send a conversation that ends with a question (max 500 characters)."}
-    key = key if key is not None else os.environ.get("ANTHROPIC_API_KEY")
+    key, call = _provider(key)
     question = history[-1]["content"]
     if key:
         try:
-            return _chat_llm(agent, history, key, llm or _llm_call)
+            return _chat_llm(agent, history, key, llm or call or _llm_call)
         except Exception as e:  # network, quota, bad key: fall back, but say so
             out = _ask_rules(agent, question)
-            out["note"] = f"The AI model was unavailable ({type(e).__name__}); answered with the built-in reader."
+            out["note"] = (f"The AI model was unavailable ({type(e).__name__}: {str(e)[:200]}); "
+                           "answered with the built-in reader.")
             return out
     return _ask_rules(agent, question)
 

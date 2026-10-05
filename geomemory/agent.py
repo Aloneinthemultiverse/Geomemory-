@@ -285,7 +285,7 @@ class AgentInterface:
         lats = sorted(o.location.lat for o in obs[::step])
         lons = sorted(o.location.lon for o in obs[::step])
         return {"ok": True, "dataset": self.dataset, "count": len(obs),
-                "llm": bool(os.environ.get("ANTHROPIC_API_KEY")),
+                "llm": bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("OPENROUTER_API_KEY")),
                 "entities": len(names), "entity_names": names[:500],
                 "sources": sorted({o.source_id for o in obs}),
                 "event_types": types,
