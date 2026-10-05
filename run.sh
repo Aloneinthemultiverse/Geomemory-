@@ -24,7 +24,7 @@ if [ "$MODE" = full ]; then
   "$VPY" -m unittest discover -s tests
   exec "$VPY" -m geomemory.api --backend memory --port 8765
 fi
-"$VPY" -c "import geomemory, tzdata" 2>/dev/null || "$VPY" -m pip install -q -e .
+"$VPY" -c "import geomemory, tzdata, anthropic" 2>/dev/null || "$VPY" -m pip install -q -e ".[ai]"
 ARGS=(--port 8765)
 if [ "$MODE" = uber ]; then
   "$VPY" -m geomemory.datasets download
